@@ -212,6 +212,7 @@ exports.getCourseByCategory = async (req, res) => {
 exports.updateCourseById = async (req, res) => {
    try {
     const { id } = req.params;
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid course ID" });
     }
@@ -226,16 +227,19 @@ exports.updateCourseById = async (req, res) => {
       faq,
       features,
       reviews,
-      toolsImages
+      toolsImages,
+      noOfLessons = 0,
+      noOfStudents = 0
     } = req.body;
 
-    // Parse JSON fields if present
-    const faqArray = faq ? JSON.parse(faq) : undefined;
-    const featuresArray = features ? JSON.parse(features) : undefined;
-    let reviewsArray = reviews ? JSON.parse(reviews) : undefined;
+    // Parse JSON fields
+    const faqArray = faq ? JSON.parse(faq) : [];
+    const featuresArray = features ? JSON.parse(features) : [];
+    let reviewsArray = reviews ? JSON.parse(reviews) : [];
 
+    // Extract files
     const files = req.files || [];
-    console.log("Uploaded files (update):", files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
+    console.log("Uploaded files:", files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
 
     const mainImageFile = files.find(file => file.fieldname === "image");
     const logoFile = files.find(file => file.fieldname === "logoImage");
@@ -249,29 +253,26 @@ exports.updateCourseById = async (req, res) => {
       file.fieldname === "reviewImage[]"
     );
 
-    // Build update object dynamically
-    const updateFields = {};
-    if (name) updateFields.name = name;
-    if (description) updateFields.description = description;
-    if (mode) updateFields.mode = mode;
-    if (category) updateFields.category = category;
-    if (subcategory) updateFields.subcategory = subcategory;
-    if (duration) updateFields.duration = duration;
-    if (faqArray) updateFields.faq = faqArray;
+    // Fetch existing course
+    let course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
 
-    // If main image uploaded
+    // Upload new main image if provided (otherwise keep old)
+    let courseImageUrl = course.image;
     if (mainImageFile) {
-      const courseImageUrl = await uploadToCloudinary(mainImageFile.buffer, "courses/main", mainImageFile.originalname);
-      updateFields.image = courseImageUrl;
+      courseImageUrl = await uploadToCloudinary(mainImageFile.buffer, "courses/main", mainImageFile.originalname);
     }
 
-    // If logo uploaded
+    // Upload new logo if provided
+    let logoImageUrl = course.logoImage || null;
     if (logoFile) {
-      const logoImageUrl = await uploadToCloudinary(logoFile.buffer, "courses/logo", logoFile.originalname);
-      updateFields.logoImage = logoImageUrl;
+      logoImageUrl = await uploadToCloudinary(logoFile.buffer, "courses/logo", logoFile.originalname);
     }
 
-    // If PDF uploaded (ensure correct format)
+    // Upload new pdf if provided
+    let pdfUrl = course.pdf || null;
     if (pdfFile) {
       if (pdfFile.mimetype !== "application/pdf") {
         return res.status(400).json({
@@ -279,78 +280,84 @@ exports.updateCourseById = async (req, res) => {
           message: "Only PDF format is allowed for course PDF"
         });
       }
-      const pdfUrl = await uploadToCloudinary(pdfFile.buffer, "courses/pdf", pdfFile.originalname);
-      updateFields.pdf = pdfUrl;
+      pdfUrl = await uploadToCloudinary(pdfFile.buffer, "courses/pdf", pdfFile.originalname);
     }
 
-    // If features and feature images uploaded
-    if (featuresArray) {
-      const featureImageUrls = [];
-      for (const file of featureFiles) {
-        const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/features", file.originalname);
-        featureImageUrls.push(uploadedUrl);
-      }
-      const featuresWithImages = featuresArray.map((feature, index) => ({
-        ...feature,
-        image: featureImageUrls[index] || null
-      }));
-      updateFields.features = featuresWithImages;
+    // Upload new feature images if provided, else keep existing
+    const featureImageUrls = [];
+    for (const file of featureFiles) {
+      const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/features", file.originalname);
+      featureImageUrls.push(uploadedUrl);
     }
+    const featuresWithImages = featuresArray.map((feature, index) => ({
+      ...feature,
+      image: featureImageUrls[index] || (course.features[index] ? course.features[index].image : null)
+    }));
 
-    // If tools images uploaded
+    // Upload new tools images if provided, else keep old
+    let toolsImageUrls = course.toolsImages || [];
     if (toolsFiles.length > 0) {
-      const toolsImageUrls = [];
+      toolsImageUrls = [];
       for (const file of toolsFiles) {
         const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/tools", file.originalname);
         toolsImageUrls.push(uploadedUrl);
       }
-      updateFields.toolsImages = toolsImageUrls;
     }
 
-    // If reviews uploaded
-    if (reviewsArray) {
-      const reviewImageUrls = [];
-      for (const file of reviewFiles) {
-        const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/reviews", file.originalname);
-        reviewImageUrls.push(uploadedUrl);
-      }
-
-      reviewsArray = reviewsArray.map((review, index) => ({
-        ...review,
-        image: reviewImageUrls[index] || null
-      }));
-
-      const reviewsWithoutImages = reviewsArray.filter(r => !r.image);
-      if (reviewsWithoutImages.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Each review must have an image uploaded",
-          missingImagesForReviews: reviewsWithoutImages.map(r => r.name)
-        });
-      }
-      if (reviewImageUrls.length !== reviewsArray.length) {
-        return res.status(400).json({
-          success: false,
-          message: "Number of review images must match number of reviews",
-          reviewsCount: reviewsArray.length,
-          reviewImagesCount: reviewImageUrls.length
-        });
-      }
-
-      updateFields.reviews = reviewsArray;
+    // Upload new review images if provided, else keep old
+    const reviewImageUrls = [];
+    for (const file of reviewFiles) {
+      const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/reviews", file.originalname);
+      reviewImageUrls.push(uploadedUrl);
     }
 
-    // Perform update
-    const updatedCourse = await Course.findByIdAndUpdate(id, { $set: updateFields }, { new: true });
+    // Map review images to reviews (merge with existing if none uploaded)
+    reviewsArray = reviewsArray.map((review, index) => ({
+      ...review,
+      image: reviewImageUrls[index] || (course.reviews[index] ? course.reviews[index].image : null)
+    }));
 
-    if (!updatedCourse) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+    // Validate reviews
+    const reviewsWithoutImages = reviewsArray.filter(r => !r.image);
+    if (reviewsWithoutImages.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Each review must have an image uploaded",
+        missingImagesForReviews: reviewsWithoutImages.map(r => r.name)
+      });
     }
+    if (reviewImageUrls.length > 0 && reviewImageUrls.length !== reviewsArray.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Number of review images must match number of reviews when uploading new ones",
+        reviewsCount: reviewsArray.length,
+        reviewImagesCount: reviewImageUrls.length
+      });
+    }
+
+    // Update course
+    course.name = name || course.name;
+    course.description = description || course.description;
+    course.mode = mode || course.mode;
+    course.category = category || course.category;
+    course.subcategory = subcategory || course.subcategory;
+    course.duration = duration || course.duration;
+    course.faq = faqArray.length > 0 ? faqArray : course.faq;
+    course.features = featuresWithImages.length > 0 ? featuresWithImages : course.features;
+    course.reviews = reviewsArray.length > 0 ? reviewsArray : course.reviews;
+    course.image = courseImageUrl;
+    course.logoImage = logoImageUrl;
+    course.pdf = pdfUrl;
+    course.toolsImages = toolsImageUrls;
+    course.noOfLessons = noOfLessons || course.noOfLessons;
+    course.noOfStudents = noOfStudents || course.noOfStudents;
+
+    await course.save();
 
     return res.status(200).json({
       success: true,
       message: "Course updated successfully",
-      data: updatedCourse  // PDF URL included directly
+      data: course
     });
   } catch (error) {
     console.error("Error updating course:", error);
