@@ -8,7 +8,7 @@ const { OurMentor, MentorExperience ,Mentor} = require("../models/ourMentors");
 // ➕ Create new enrollment
 exports.createEnrollment = async (req, res) => {
   try {
-    const { batchNumber, batchName, courseId, startDate, duration, category } = req.body;
+    const { batchNumber, batchName, courseId, startDate, timings, duration, category } = req.body;
 
     if (!batchNumber || !batchName || !courseId || !startDate || !timings || !duration || !category) {
       return res.status(400).json({
@@ -18,6 +18,10 @@ exports.createEnrollment = async (req, res) => {
     }
 
     // Validate courseId
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Valid courseId is required." });
+    }
+
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ success: false, message: "Course not found" });
@@ -28,6 +32,7 @@ exports.createEnrollment = async (req, res) => {
       batchName,
       courseId,
       startDate,
+      timings,
       duration,
       category
     });
@@ -45,7 +50,6 @@ exports.createEnrollment = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 // 📖 Get all enrollments
 exports.getAllEnrollments = async (req, res) => {
   try {
@@ -90,14 +94,18 @@ exports.getEnrollmentById = async (req, res) => {
 // ✏️ Update enrollment
 exports.updateEnrolledByUserId = async (req, res) => {
   try {
-    const { id } = req.params;  // Here userId is treated as enrollment _id
-    const { batchNumber, batchName, courseId, startDate, duration, category } = req.body;
+    const { enrollmentId } = req.params;
+    const { batchNumber, batchName, courseId, startDate, timings, duration, category } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Valid enrollment ID is required." });
+    if (!mongoose.Types.ObjectId.isValid(enrollmentId)) {
+      return res.status(400).json({ success: false, message: "Valid enrollmentId is required." });
     }
 
-    // If courseId is provided, validate it
+    if (courseId && !mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Valid courseId is required." });
+    }
+
+    // If courseId is provided, validate it exists
     if (courseId) {
       const course = await Course.findById(courseId);
       if (!course) {
@@ -106,9 +114,9 @@ exports.updateEnrolledByUserId = async (req, res) => {
     }
 
     const updatedEnrollment = await Enrollment.findByIdAndUpdate(
-      id,
-      { batchNumber, batchName, courseId, startDate, duration, category },
-      { new: true, runValidators: true }
+      enrollmentId,
+      { batchNumber, batchName, courseId, startDate, timings, duration, category },
+      { new: true }
     ).populate("courseId");
 
     if (!updatedEnrollment) {
