@@ -208,45 +208,6 @@ exports.getCourseByCategory = async (req, res) => {
   }
 };
 
-exports.updateCourseStats = async (req, res) => {
-  try {
-    const { id } = req.params; // course ID
-    const { noOfLessons, noOfStudents } = req.body;
-
-    // Validate ID
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid course ID" });
-    }
-
-    // Find and update
-    const updatedCourse = await Course.findByIdAndUpdate(
-      id,
-      { 
-        ...(noOfLessons !== undefined && { noOfLessons }),
-        ...(noOfStudents !== undefined && { noOfStudents })
-      },
-      { new: true } // return updated document
-    );
-
-    if (!updatedCourse) {
-      return res.status(404).json({ success: false, message: "Course not found" });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Course stats updated successfully",
-      data: updatedCourse
-    });
-
-  } catch (error) {
-    console.error("Error updating course stats:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message
-    });
-  }
-};
 
 exports.updateCourseById = async (req, res) => {
    try {

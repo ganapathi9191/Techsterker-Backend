@@ -15,10 +15,7 @@ const {
   getTechnicalTeamById,
   updateTechnicalTeam,
   deleteTechnicalTeam,
-  createClassRoom, 
-  getAllClassRoom, 
-  updateClassRoom, 
-  deleteClassRoom
+
 } = require("../controllers/AboutUsController");
 const upcomingBatchController = require("../controllers/upcomingBatchController");
 

@@ -199,7 +199,6 @@ router.get('/courseControllers', courseController.getAllCourses);
 router.get('/courseController/:id', courseController.getCourseById);
 router.get('/courseController/category/:category', courseController.getCourseByCategory);
 router.put("/courseController/:id", upload.any(), courseController.updateCourseById);
-router.put("/update-stats/:id", courseController.updateCourseStats);
 router.delete('/courseController/:id', courseController.deleteCourseById);
 
 
