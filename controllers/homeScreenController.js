@@ -1,4 +1,4 @@
-const { HomeScreen, HomeFeature,Client,Review,Counter,HomeDefferschems,HomeCourses} = require("../models/HomeScreen");
+const { HomeScreen, HomeFeature,Client,Review,Counter,HomeDefferschems,HomeCourses,Demo} = require("../models/HomeScreen");
 const { uploadImage,uploadToCloudinary,uploadImages,uploadToCloudinarys  } = require('../config/cloudinary1');
 const mongoose = require('mongoose');
 
@@ -697,4 +697,128 @@ exports.deleteHomeCourses = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Delete failed', error: error.message });
   }
+};
+
+
+
+// --------------------
+// CREATE DEMO
+// --------------------
+exports.createDemo = async (req, res) => {
+    try {
+        const { name, email, phoneNumber, course } = req.body;
+
+        if (!name || !email || !phoneNumber || !course) {
+            return res.status(400).json({ success: false, message: "All fields are required." });
+        }
+
+        const demo = await Demo.create({ name, email, phoneNumber, course });
+        return res.status(201).json({
+            success: true,
+            message: "Demo created successfully",
+            data: demo
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// --------------------
+// GET ALL DEMOS
+// --------------------
+exports.getAllDemos = async (req, res) => {
+    try {
+        const demos = await Demo.find();
+        return res.status(200).json({
+            success: true,
+            message: "All demos fetched successfully",
+            data: demos
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// --------------------
+// GET DEMO BY ID
+// --------------------
+exports.getDemoById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Valid ID is required." });
+        }
+
+        const demo = await Demo.findById(id);
+        if (!demo) {
+            return res.status(404).json({ success: false, message: "Demo not found." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Demo fetched successfully",
+            data: demo
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// --------------------
+// UPDATE DEMO BY ID
+// --------------------
+exports.updateDemoById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, email, phoneNumber, course } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Valid ID is required." });
+        }
+
+        const demo = await Demo.findByIdAndUpdate(
+            id,
+            { name, email, phoneNumber, course },
+            { new: true, runValidators: true }
+        );
+
+        if (!demo) {
+            return res.status(404).json({ success: false, message: "Demo not found." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Demo updated successfully",
+            data: demo
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// --------------------
+// DELETE DEMO BY ID
+// --------------------
+exports.deleteDemoById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Valid ID is required." });
+        }
+
+        const demo = await Demo.findByIdAndDelete(id);
+        if (!demo) {
+            return res.status(404).json({ success: false, message: "Demo not found." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Demo deleted successfully",
+            data: demo
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
 };

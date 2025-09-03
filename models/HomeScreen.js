@@ -111,7 +111,12 @@ const homeCoursesSchema = new mongoose.Schema({
   },
 });
 
-
+const demoSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    email: { type: String, required: true },
+    phoneNumber: { type: String, required: true },
+    course: { type: String, required: true }
+}, { timestamps: true });
 
 const Counter = mongoose.model("Counter", CounterSchema);
 const Review = mongoose.model("Review", reviewSchema);
@@ -120,9 +125,9 @@ const HomeScreen = mongoose.model("HomeScreen", HomeScreenSchema);
 const Client = mongoose.model('Client', ContentSchema);
 const HomeDefferschems = mongoose.model("HomeDefferschems", HomeDefferschemsSchema);
 const HomeCourses = mongoose.model("HomeCourses", homeCoursesSchema);
-
+const Demo = mongoose.model("Demo", demoSchema);
 
 
 
 // ✅ Export both
-module.exports = { HomeScreen, HomeFeature,Client,Review,Counter,HomeDefferschems,HomeCourses };
+module.exports = { HomeScreen, HomeFeature,Client,Review,Counter,HomeDefferschems,HomeCourses,Demo };

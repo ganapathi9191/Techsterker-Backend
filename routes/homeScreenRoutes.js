@@ -218,7 +218,11 @@ router.get("/getintouch/:id", courseController.getGetInTouchById);
 router.put("/getintouch/:id", courseController.updateGetInTouchById);
 router.delete("/getintouch/:id", courseController.deleteGetInTouchById);
 
-
+router.post("/demo", homeScreenController.createDemo);         // Create
+router.get("/demo", homeScreenController.getAllDemos);         // Get all
+router.get("/demo/:id", homeScreenController.getDemoById);     // Get by ID
+router.put("/demo/:id", homeScreenController.updateDemoById);  // Update by ID
+router.delete("/demo/:id", homeScreenController.deleteDemoById);
 
 
 module.exports = router;
