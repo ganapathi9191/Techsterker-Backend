@@ -5,7 +5,6 @@ const userRegister = require("../models/registerUser");
 const {Course} = require("../models/coursesModel");
 const { OurMentor, MentorExperience ,Mentor} = require("../models/ourMentors");
 
-
 // ➕ Create new enrollment
 exports.createEnrollment = async (req, res) => {
   try {
@@ -91,36 +90,29 @@ exports.getEnrollmentById = async (req, res) => {
 // ✏️ Update enrollment
 exports.updateEnrolledByUserId = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params;  // Here userId is treated as enrollment _id
     const { batchNumber, batchName, courseId, startDate, duration, category } = req.body;
 
-    const updateData = {};
-    if (batchNumber) updateData.batchNumber = batchNumber;
-    if (batchName) updateData.batchName = batchName;
-    if (startDate) updateData.startDate = startDate;
-  
-    if (duration) updateData.duration = duration;
-    if (category) updateData.category = category;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Valid enrollment ID is required." });
+    }
 
+    // If courseId is provided, validate it
     if (courseId) {
       const course = await Course.findById(courseId);
       if (!course) {
         return res.status(404).json({ success: false, message: "Course not found" });
       }
-      updateData.courseId = courseId;
     }
 
     const updatedEnrollment = await Enrollment.findByIdAndUpdate(
       id,
-      { $set: updateData },
-      { new: true }
+      { batchNumber, batchName, courseId, startDate, duration, category },
+      { new: true, runValidators: true }
     ).populate("courseId");
 
     if (!updatedEnrollment) {
-      return res.status(404).json({
-        success: false,
-        message: "Enrollment not found"
-      });
+      return res.status(404).json({ success: false, message: "Enrollment not found" });
     }
 
     return res.status(200).json({
