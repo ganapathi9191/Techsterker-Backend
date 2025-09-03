@@ -1,5 +1,7 @@
 const { HomeScreen, HomeFeature,Client,Review,Counter,HomeDefferschems,HomeCourses} = require("../models/HomeScreen");
 const { uploadImage,uploadToCloudinary,uploadImages,uploadToCloudinarys  } = require('../config/cloudinary1');
+const mongoose = require('mongoose');
+
 
 // Create or update home screen banners
 exports.createOrUpdateHomeScreen = async (req, res) => {
@@ -82,40 +84,41 @@ exports.getBannerById = async (req, res) => {
 exports.updateBannerById = async (req, res) => {
   try {
     const { bannerId } = req.params;
-    const { titles, contents } = req.body;
+    const { title, content } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(bannerId)) {
       return res.status(400).json({ success: false, message: "Invalid banner ID" });
     }
 
-    // Upload new images (if any)
-    let uploadedUrls = [];
-    if (req.files && req.files.length > 0) {
-      for (let i = 0; i < req.files.length; i++) {
-        const url = await uploadToCloudinary(req.files[i].buffer, "hero-banners");
-        uploadedUrls.push(url);
-      }
+    // Upload image if file is provided
+    let uploadedUrl = null;
+    if (req.file) {
+      uploadedUrl = await uploadToCloudinary(req.file.buffer, "hero-banners");
     }
 
-    // Fetch document and update specific banner inside array
+    // Find the banner inside the array
     const homeScreen = await HomeScreen.findOne({ "heroBanner._id": bannerId });
     if (!homeScreen) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
     const banner = homeScreen.heroBanner.id(bannerId);
-    if (titles && titles.length > 0) banner.title = titles[0];   // single title per banner
-    if (contents && contents.length > 0) banner.content = contents[0];
-    if (uploadedUrls.length > 0) banner.image = uploadedUrls[0]; // update with new image
+    if (title) banner.title = title;
+    if (content) banner.content = content;
+    if (uploadedUrl) banner.image = uploadedUrl;
 
     await homeScreen.save();
-    res.status(200).json({ success: true, message: "Banner updated successfully", data: banner });
+
+    res.status(200).json({
+      success: true,
+      message: "Banner updated successfully",
+      data: banner
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
-
 // Delete banner by ID
 exports.deleteBannerById = async (req, res) => {
   try {

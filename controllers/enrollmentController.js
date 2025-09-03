@@ -9,7 +9,7 @@ const { OurMentor, MentorExperience ,Mentor} = require("../models/ourMentors");
 // ➕ Create new enrollment
 exports.createEnrollment = async (req, res) => {
   try {
-    const { batchNumber, batchName, courseId, startDate, timings, duration, category } = req.body;
+    const { batchNumber, batchName, courseId, startDate, duration, category } = req.body;
 
     if (!batchNumber || !batchName || !courseId || !startDate || !timings || !duration || !category) {
       return res.status(400).json({
@@ -29,7 +29,6 @@ exports.createEnrollment = async (req, res) => {
       batchName,
       courseId,
       startDate,
-      timings,
       duration,
       category
     });
@@ -93,13 +92,13 @@ exports.getEnrollmentById = async (req, res) => {
 exports.updateEnrolledByUserId = async (req, res) => {
   try {
     const { id } = req.params;
-    const { batchNumber, batchName, courseId, startDate, timings, duration, category } = req.body;
+    const { batchNumber, batchName, courseId, startDate, duration, category } = req.body;
 
     const updateData = {};
     if (batchNumber) updateData.batchNumber = batchNumber;
     if (batchName) updateData.batchName = batchName;
     if (startDate) updateData.startDate = startDate;
-    if (timings) updateData.timings = timings;
+  
     if (duration) updateData.duration = duration;
     if (category) updateData.category = category;
 

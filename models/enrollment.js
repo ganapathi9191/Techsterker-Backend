@@ -6,7 +6,6 @@ const enrollmentSchema = new mongoose.Schema({
   batchName: { type: String, required: true },
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   startDate: { type: Date, required: true },
-  timings: { type: String, required: true },
   duration: { type: String, required: true },
   category: { type: String, required: true },
   assignedMentors: [{ 
