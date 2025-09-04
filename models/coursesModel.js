@@ -36,7 +36,7 @@ const courseSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const downloadSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+    name: { type: String, required: true },
   phoneNumber: { type: String, required: true },
   otp: { type: String, required: true },
   expiresAt: { type: Date, required: true },

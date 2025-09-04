@@ -4,19 +4,6 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 const twilio = require("twilio");
 
-const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
-
-function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function formatPhoneNumber(phone) {
-  let clean = phone.toString().trim();
-  if (!clean.startsWith('+')) {
-    clean = '+91' + clean; // Default India
-  }
-  return clean;
-}
 exports.createCourse = async (req, res) => {
   try {
     const {
@@ -391,34 +378,25 @@ exports.sendOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: "Name and phone number required" });
     }
 
-    const formatted = formatPhoneNumber(phoneNumber);
-    const otp = generateOtp();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // expires in 5 minutes
+    // Fixed OTP
+    const otp = "1234";
+    const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds
 
-    // Save to DB (overwrite any old OTP for same phone)
+    // Save / update DB
     await DownloadUser.findOneAndUpdate(
-      { phoneNumber: formatted },
+      { phoneNumber },
       { name, otp, expiresAt, verified: false },
       { upsert: true, new: true }
     );
 
-    // Send WhatsApp message
-    const msg = await client.messages.create({
-      body: `Hi ${name}, your OTP is ${otp}. It expires in 5 minutes.`,
-      from: `whatsapp:${process.env.TWILIO_WHATSAPP_SANDBOX}`,
-      to: `whatsapp:${formatted}`
+    return res.status(200).json({
+      success: true,
+      message: "OTP generated successfully (use 1234 for verification)"
     });
 
-    console.log("WhatsApp message SID:", msg.sid);
-    return res.status(200).json({ success: true, message: "OTP sent successfully" });
-
   } catch (error) {
-    console.error("Error sending OTP:", error);
-    let msg = "Failed to send OTP via WhatsApp";
-    if (error.code === 63007) {
-      msg += " — Make sure this phone has joined the Twilio Sandbox by sending the join code to +14155238886.";
-    }
-    return res.status(500).json({ success: false, message: msg, error: error.message });
+    console.error("Error generating OTP:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
 
@@ -430,8 +408,7 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone number and OTP required" });
     }
 
-    const formatted = formatPhoneNumber(phoneNumber);
-    const record = await DownloadUser.findOne({ phoneNumber: formatted });
+    const record = await DownloadUser.findOne({ phoneNumber });
 
     if (!record) {
       return res.status(400).json({ success: false, message: "No OTP found for this phone" });
@@ -445,7 +422,7 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: "OTP expired" });
     }
 
-    if (record.otp !== otp) {
+    if (otp !== "1234") {
       return res.status(400).json({ success: false, message: "Invalid OTP" });
     }
 
@@ -459,7 +436,6 @@ exports.verifyOtp = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
-
 
 // Add Get In Touch Entry
 exports.addGetInTouch = async (req, res) => {
