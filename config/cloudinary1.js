@@ -18,6 +18,7 @@ function getResourceType(fileName = "") {
   return "auto"; // auto works for images and videos
 }
 
+
 const uploadImage = (fileBuffer, folderName = "uploads", fileName = "") => {
   return new Promise((resolve, reject) => {
     const resourceType = getResourceType(fileName);
