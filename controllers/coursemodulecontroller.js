@@ -206,8 +206,8 @@ exports.getCourseModulesByUserId = async (req, res) => {
     
     if (!courseModules || courseModules.length === 0) {
       return res.status(404).json({
-        success: false,
-        message: "No course modules found for this user"
+        success: true,
+        message:[]
       });
     }
     
