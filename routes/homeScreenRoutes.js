@@ -14,7 +14,7 @@ const { validateOtpRequest, validateOtpVerification } = require("../utils/valida
 router.post("/hero-banners", upload.array("images"), homeScreenController.createOrUpdateHomeScreen);
 router.get("/hero-banners", homeScreenController.getAllBanners);
 router.get("/hero-banners/:bannerId", homeScreenController.getBannerById);
-router.put("/hero-banners/:bannerId", upload.array("images"), homeScreenController.updateBannerById);
+router.put("/hero-banners/:bannerId", upload.single("image"), homeScreenController.updateBannerById);
 router.delete("/hero-banners/:bannerId", homeScreenController.deleteBannerById);
 
 

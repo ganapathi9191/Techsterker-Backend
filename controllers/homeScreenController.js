@@ -86,34 +86,34 @@ exports.updateBannerById = async (req, res) => {
     const { bannerId } = req.params;
     const { title, content } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(bannerId)) {
-      return res.status(400).json({ success: false, message: "Invalid banner ID" });
+    if (!bannerId) {
+      return res.status(400).json({ success: false, message: "Banner ID is required in params" });
     }
 
-    // Upload image if file is provided
-    let uploadedUrl = null;
-    if (req.file) {
-      uploadedUrl = await uploadToCloudinary(req.file.buffer, "hero-banners");
-    }
-
-    // Find the banner inside the array
-    const homeScreen = await HomeScreen.findOne({ "heroBanner._id": bannerId });
+    // Find the home screen
+    const homeScreen = await HomeScreen.findOne();
     if (!homeScreen) {
+      return res.status(404).json({ success: false, message: "Home screen not found" });
+    }
+
+    // Find the specific banner
+    const banner = homeScreen.heroBanner.id(bannerId);
+    if (!banner) {
       return res.status(404).json({ success: false, message: "Banner not found" });
     }
 
-    const banner = homeScreen.heroBanner.id(bannerId);
+    // Update title/content if provided
     if (title) banner.title = title;
     if (content) banner.content = content;
-    if (uploadedUrl) banner.image = uploadedUrl;
+
+    // If a new image is uploaded, replace it
+    if (req.file) {
+      const url = await uploadToCloudinary(req.file.buffer);
+      banner.image = url;
+    }
 
     await homeScreen.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Banner updated successfully",
-      data: banner
-    });
+    res.status(200).json({ success: true, message: "Banner updated successfully", data: banner });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error", error: err.message });
