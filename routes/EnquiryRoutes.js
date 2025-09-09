@@ -36,4 +36,21 @@ router.put("/contactus/:id", contactus.updateEnquiryById);
 router.delete("/contactus/:id", contactus.deleteEnquiryById);
 
 
+// Create (with resume)
+router.post("/apply", upload.single("resume"), contactus.createApply);
+
+// Read all
+router.get("/apply", contactus.getAllApplies);
+
+// Read one
+router.get("/apply/:id", contactus.getApplyById);
+
+// Update (optional resume re-upload)
+router.put("/apply/:id", upload.single("resume"), contactus.updateApplyById);
+
+// Delete
+router.delete("/apply/:id", contactus.deleteApply);
+
+
+
 module.exports = router;

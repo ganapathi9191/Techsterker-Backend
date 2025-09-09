@@ -208,6 +208,7 @@ router.delete('/courseController/:id', courseController.deleteCourseById);
 
 router.post("/send-otp", validateOtpRequest, courseController.sendOtp);
 router.post("/verify-otp", validateOtpVerification, courseController.verifyOtp);
+router.get("/users", courseController.getAllUsers);
 
 
 

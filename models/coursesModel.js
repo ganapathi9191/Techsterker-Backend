@@ -38,6 +38,7 @@ const courseSchema = new mongoose.Schema({
 const downloadSchema = new mongoose.Schema({
     name: { type: String, required: true },
   phoneNumber: { type: String, required: true },
+  syllabus:{type:String},
   otp: { type: String, required: true },
   expiresAt: { type: Date, required: true },
   verified: { type: Boolean, default: false }

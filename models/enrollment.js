@@ -29,12 +29,40 @@ const certificateSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+
+
+const OurCertificateSchema = new mongoose.Schema(
+  {
+    certificateImage: { type: String, required: true }, // Cloudinary URL
+    description: { type: String, required: true },
+  },
+  { timestamps: true }
+);
+
+
+const CommunitySchema = new mongoose.Schema(
+  {
+    slack: { type: String, required: true },
+    discord: { type: String, required: true },
+    whatsapp: { type: String, required: true }
+  },
+  { timestamps: true }
+);
+
+
 // Make sure you're exporting both models correctly
 const Enrollment = mongoose.model('Enrollment', enrollmentSchema);
 const Certificate = mongoose.model('Certificate', certificateSchema);
+const OurCertificate = mongoose.model("OurCertificate", OurCertificateSchema);
+const Community = mongoose.model("Community", CommunitySchema);
+
+
+
 
 // Export both models
 module.exports = {
   Enrollment,
-  Certificate
+  Certificate,
+  OurCertificate,
+  Community
 };

@@ -1,4 +1,7 @@
-const {Enquiry,ContactEnquiry } = require('../models/EnquiryModel');
+const {Enquiry,ContactEnquiry,Apply } = require('../models/EnquiryModel');
+const { uploadToCloudinary } = require("../config/cloudinary1"); // adjust path
+
+
 function formatPhoneNumber(phone) {
   let clean = phone.toString().trim();
   if (!clean.startsWith('+')) {
@@ -11,54 +14,84 @@ function formatPhoneNumber(phone) {
 // Create Enquiry
 exports.createEnquiry = async (req, res) => {
   try {
-    const enquiry = new Enquiry(req.body);
-    const saved = await enquiry.save();
-    res.status(201).json(saved);
+    const { name, phoneNumber, email, courses, city, message } = req.body;
+
+    const newEnquiry = new Enquiry({
+      name,
+      phoneNumber,
+      email,
+      courses,
+      city,
+      message
+    });
+
+    await newEnquiry.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Enquiry created successfully",
+      data: newEnquiry
+    });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Get All Enquiries
 exports.getEnquiries = async (req, res) => {
   try {
     const enquiries = await Enquiry.find();
-    res.json(enquiries);
+    res.status(200).json({
+      success: true,
+      count: enquiries.length,
+      data: enquiries
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 // Get One Enquiry by ID
 exports.getEnquiryById = async (req, res) => {
-  try {
+   try {
     const enquiry = await Enquiry.findById(req.params.id);
-    if (!enquiry) return res.status(404).json({ message: "Enquiry not found" });
-    res.json(enquiry);
+    if (!enquiry) {
+      return res.status(404).json({ success: false, message: "Enquiry not found" });
+    }
+    res.status(200).json({ success: true, data: enquiry });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Update Enquiry
 exports.updateEnquiry = async (req, res) => {
   try {
-    const updated = await Enquiry.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updated) return res.status(404).json({ message: "Enquiry not found" });
-    res.json(updated);
+    const enquiry = await Enquiry.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!enquiry) {
+      return res.status(404).json({ success: false, message: "Enquiry not found" });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Enquiry updated successfully",
+      data: enquiry
+    });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Delete Enquiry
 exports.deleteEnquiry = async (req, res) => {
   try {
-    const deleted = await Enquiry.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Enquiry not found" });
-    res.json({ message: "Deleted successfully" });
+    const enquiry = await Enquiry.findByIdAndDelete(req.params.id);
+    if (!enquiry) {
+      return res.status(404).json({ success: false, message: "Enquiry not found" });
+    }
+    res.status(200).json({ success: true, message: "Enquiry deleted successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -230,3 +263,91 @@ exports.deleteEnquiryById = async (req, res) => {
     });
   }
 };
+
+
+
+
+// Create Apply
+exports.createApply = async (req, res) => {
+  try {
+    const { fullname, email, mobile, experties, experience, message } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Resume file is required" });
+    }
+
+    const resumeUrl = await uploadToCloudinary(req.file.buffer, "resumes", req.file.originalname);
+
+    const newApply = new Apply({
+      fullname, email, mobile, experties, experience, message, resume: resumeUrl
+    });
+
+    await newApply.save();
+    return res.status(201).json({ success: true, message: "Application submitted successfully", data: newApply });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Get All Applications
+exports.getAllApplies = async (req, res) => {
+  try {
+    const applies = await Apply.find().sort({ createdAt: -1 });
+    return res.status(200).json({ success: true, count: applies.length, data: applies });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Get Application By ID
+exports.getApplyById = async (req, res) => {
+  try {
+    const apply = await Apply.findById(req.params.id);
+    if (!apply) return res.status(404).json({ success: false, message: "Application not found" });
+    return res.status(200).json({ success: true, data: apply });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Update Application By ID (handles optional resume re-upload)
+exports.updateApplyById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fullname, email, mobile, experties, experience, message } = req.body;
+
+    // Build update object only with provided fields
+    const updateData = {};
+    if (fullname !== undefined) updateData.fullname = fullname;
+    if (email !== undefined) updateData.email = email;
+    if (mobile !== undefined) updateData.mobile = mobile;
+    if (experties !== undefined) updateData.experties = experties;
+    if (experience !== undefined) updateData.experience = experience;
+    if (message !== undefined) updateData.message = message;
+
+    // If resume file provided, upload and set resume url
+    if (req.file) {
+      const resumeUrl = await uploadToCloudinary(req.file.buffer, "resumes", req.file.originalname);
+      updateData.resume = resumeUrl;
+    }
+
+    const updated = await Apply.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    if (!updated) return res.status(404).json({ success: false, message: "Application not found" });
+
+    return res.status(200).json({ success: true, message: "Application updated successfully", data: updated });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Delete Application By ID
+exports.deleteApply = async (req, res) => {
+  try {
+    const deleted = await Apply.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: "Application not found" });
+    return res.status(200).json({ success: true, message: "Application deleted successfully", data: deleted });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+

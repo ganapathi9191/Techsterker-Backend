@@ -4,8 +4,9 @@ const enquirySchema = new mongoose.Schema({
   name: { type: String, required: true },
   phoneNumber: { type: String, required: true },
   email: { type: String, required: true },
-  course: [
+  courses: [
     {
+      _id:false,
       name: { type: String, required: true }
     }
   ],
@@ -24,8 +25,22 @@ const contactEnquirySchema = new mongoose.Schema({
   timestamps: true
 });
 
+
+const applySchema = new mongoose.Schema({
+  fullname: { type: String, required: true },
+  email: { type: String, required: true },
+  mobile: { type: String, required: true },
+  experties: { type: String, required: true },
+  experience: { type: String, required: true },
+  message: { type: String },
+  resume: { type: String, required: true } // cloudinary url
+});
+
+
+
 const ContactEnquiry = mongoose.model("ContactEnquiry", contactEnquirySchema);
 const Enquiry = mongoose.model("Enquiry", enquirySchema);
+const Apply = mongoose.model("Apply", applySchema);
 
 
-module.exports = {ContactEnquiry,Enquiry}
+module.exports = {ContactEnquiry,Enquiry,Apply};

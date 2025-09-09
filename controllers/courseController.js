@@ -373,19 +373,17 @@ exports.deleteCourseById = async (req, res) => {
 // POST /api/send-otp
 exports.sendOtp = async (req, res) => {
   try {
-    const { name, phoneNumber } = req.body;
+    const { name, phoneNumber, syllabus } = req.body;
     if (!name || !phoneNumber) {
       return res.status(400).json({ success: false, message: "Name and phone number required" });
     }
 
-    // Fixed OTP
     const otp = "1234";
-    const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds
+    const expiresAt = new Date(Date.now() + 90 * 1000);
 
-    // Save / update DB
     await DownloadUser.findOneAndUpdate(
       { phoneNumber },
-      { name, otp, expiresAt, verified: false },
+      { name, syllabus, otp, expiresAt, verified: false },
       { upsert: true, new: true }
     );
 
@@ -393,7 +391,6 @@ exports.sendOtp = async (req, res) => {
       success: true,
       message: "OTP generated successfully (use 1234 for verification)"
     });
-
   } catch (error) {
     console.error("Error generating OTP:", error);
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
@@ -409,30 +406,31 @@ exports.verifyOtp = async (req, res) => {
     }
 
     const record = await DownloadUser.findOne({ phoneNumber });
+    if (!record) return res.status(400).json({ success: false, message: "No OTP found for this phone" });
 
-    if (!record) {
-      return res.status(400).json({ success: false, message: "No OTP found for this phone" });
-    }
+    if (record.verified) return res.status(400).json({ success: false, message: "OTP already used" });
 
-    if (record.verified) {
-      return res.status(400).json({ success: false, message: "OTP already used" });
-    }
+    if (record.expiresAt < new Date()) return res.status(400).json({ success: false, message: "OTP expired" });
 
-    if (record.expiresAt < new Date()) {
-      return res.status(400).json({ success: false, message: "OTP expired" });
-    }
-
-    if (otp !== "1234") {
-      return res.status(400).json({ success: false, message: "Invalid OTP" });
-    }
+    if (otp !== "1234") return res.status(400).json({ success: false, message: "Invalid OTP" });
 
     record.verified = true;
     await record.save();
 
     return res.status(200).json({ success: true, message: "OTP verified successfully" });
-
   } catch (error) {
     console.error("Error verifying OTP:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
+// GET /api/users
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await DownloadUser.find().select("-otp -expiresAt"); // hide sensitive fields
+    return res.status(200).json({ success: true, data: users });
+  } catch (error) {
+    console.error("Error fetching users:", error);
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };

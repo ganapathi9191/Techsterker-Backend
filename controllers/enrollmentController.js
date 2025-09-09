@@ -1,4 +1,4 @@
-const { Enrollment, Certificate } = require('../models/enrollment');
+const { Enrollment, Certificate,OurCertificate,Community } = require('../models/enrollment');
 const { uploadImage, uploadToCloudinary } = require('../config/cloudinary1');
 const mongoose = require('mongoose');
 const userRegister = require("../models/registerUser"); 
@@ -746,3 +746,153 @@ exports.getMentorWithDetailedBatches = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+
+
+
+
+// Create Certificate
+exports.createCertificate = async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!req.file) return res.status(400).json({ success: false, message: "Image is required" });
+
+    const imageUrl = await uploadToCloudinary(req.file.buffer, "certificates", req.file.originalname);
+
+    const certificate = new OurCertificate({ certificateImage: imageUrl, description });
+    await certificate.save();
+
+    res.status(201).json({ success: true, message: "Certificate created successfully", data: certificate });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get All Certificates
+exports.getAllCertificates = async (req, res) => {
+  try {
+    const certificates = await OurCertificate.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, data: certificates });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get Certificate by ID
+exports.getCertificateById = async (req, res) => {
+  try {
+    const certificate = await OurCertificate.findById(req.params.id);
+    if (!certificate) return res.status(404).json({ success: false, message: "Certificate not found" });
+
+    res.status(200).json({ success: true, data: certificate });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Update Certificate
+exports.updateCertificate = async (req, res) => {
+  try {
+    const { description } = req.body;
+    let updateData = { description };
+
+    if (req.file) {
+      const imageUrl = await uploadToCloudinary(req.file.buffer, "certificates", req.file.originalname);
+      updateData.certificateImage = imageUrl;
+    }
+
+    const certificate = await OurCertificate.findByIdAndUpdate(req.params.id, updateData, { new: true });
+
+    if (!certificate) return res.status(404).json({ success: false, message: "Certificate not found" });
+
+    res.status(200).json({ success: true, message: "Certificate updated successfully", data: certificate });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Delete Certificate
+exports.deleteCertificate = async (req, res) => {
+  try {
+    const certificate = await OurCertificate.findByIdAndDelete(req.params.id);
+    if (!certificate) return res.status(404).json({ success: false, message: "Certificate not found" });
+
+    res.status(200).json({ success: true, message: "Certificate deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+
+// ✅ Create Community
+exports.createCommunity = async (req, res) => {
+  try {
+    const { slack, discord, whatsapp } = req.body;
+
+    if (!slack || !discord || !whatsapp) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    const community = new Community({ slack, discord, whatsapp });
+    await community.save();
+
+    res.status(201).json({ success: true, message: "Community created successfully", data: community });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Get All Communities
+exports.getAllCommunities = async (req, res) => {
+  try {
+    const communities = await Community.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, data: communities });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Get Community by ID
+exports.getCommunityById = async (req, res) => {
+  try {
+    const community = await Community.findById(req.params.id);
+    if (!community) return res.status(404).json({ success: false, message: "Community not found" });
+
+    res.status(200).json({ success: true, data: community });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Update Community by ID
+exports.updateCommunity = async (req, res) => {
+  try {
+    const { slack, discord, whatsapp } = req.body;
+
+    const community = await Community.findByIdAndUpdate(
+      req.params.id,
+      { slack, discord, whatsapp },
+      { new: true, runValidators: true }
+    );
+
+    if (!community) return res.status(404).json({ success: false, message: "Community not found" });
+
+    res.status(200).json({ success: true, message: "Community updated successfully", data: community });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Delete Community by ID
+exports.deleteCommunity = async (req, res) => {
+  try {
+    const community = await Community.findByIdAndDelete(req.params.id);
+    if (!community) return res.status(404).json({ success: false, message: "Community not found" });
+
+    res.status(200).json({ success: true, message: "Community deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

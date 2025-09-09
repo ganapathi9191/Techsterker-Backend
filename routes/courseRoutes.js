@@ -60,4 +60,23 @@ router.delete('/certificate/:id', enrollmentController.deleteCertificate);
 
 
 
+// Routes
+router.post("/OurCertificate", upload.single("certificateImage"), enrollmentController.createCertificate);
+router.get("/OurCertificates", enrollmentController.getAllCertificates);
+router.get("/OurCertificate/:id", enrollmentController.getCertificateById);
+router.put("/OurCertificate/:id", upload.single("certificateImage"), enrollmentController.updateCertificate);
+router.delete("/OurCertificate/:id", enrollmentController.deleteCertificate);
+
+
+
+// Routes
+router.post("/community", enrollmentController.createCommunity);
+router.get("/communitys", enrollmentController.getAllCommunities);
+router.get("/community/:id", enrollmentController.getCommunityById);
+router.put("/community/:id", enrollmentController.updateCommunity);
+router.delete("/community/:id", enrollmentController.deleteCommunity);
+
+
+
+
 module.exports = router;
