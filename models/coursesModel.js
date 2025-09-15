@@ -22,7 +22,7 @@ const courseSchema = new mongoose.Schema({
   description: { type: String, required: true },
   mode: { type: String, default: 'Online' },
   category: { type: String, required: true },
-  price: { type: String},
+  price: { type: Number},
   duration: { type: String, required: true },
    noOfLessons: { type: String, default: 0 }, 
   noOfStudents: { type: String, default: 0 }, 
