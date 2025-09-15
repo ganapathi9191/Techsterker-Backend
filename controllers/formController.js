@@ -1,6 +1,7 @@
 const { Form, Payment } = require("../models/formModel");
 const { Course } = require("../models/coursesModel");
 const Razorpay = require("razorpay");
+const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -76,48 +77,66 @@ exports.deleteFormById = async (req, res) => {
 
 // Generate OTP
 exports.generateOtp = async (req, res) => {
-  try {
-    const { studentId } = req.params;
+ try {
+    const { studentId } = req.params; // can be _id or mobile
     const { mobile } = req.body;
 
-    const form = await Form.findById(studentId);
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
-    if (form.mobile !== mobile) return res.status(400).json({ success: false, message: "Mobile does not match" });
+    let form;
 
-    const otp = "1234"; // fixed
-    const token = jwt.sign({ formId: form._id, mobile }, JWT_SECRET, { expiresIn: "10m" });
+    // First try to find by _id
+    if (mongoose.Types.ObjectId.isValid(studentId)) {
+      form = await Form.findById(studentId);
+    }
+
+    // If not found by _id, try by mobile
+    if (!form && mobile) {
+      form = await Form.findOne({ mobile });
+    }
+
+    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+
+    // Ensure mobile matches if provided
+    if (mobile && form.mobile !== mobile) 
+      return res.status(400).json({ success: false, message: "Mobile does not match" });
+
+    const otp = "1234"; // fixed OTP
+    const token = jwt.sign({ studentId: form._id.toString(), mobile: form.mobile }, JWT_SECRET, { expiresIn: "10m" });
 
     res.json({ success: true, message: "OTP generated", otp, token });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Verify OTP
 exports.verifyOtp = async (req, res) => {
   try {
-    const { studentId } = req.params;
     const { otp, token } = req.body;
 
     if (!token) return res.status(401).json({ success: false, message: "Token required" });
-    let decoded;
-    try { decoded = jwt.verify(token, JWT_SECRET); } catch { return res.status(400).json({ success: false, message: "Invalid token" }); }
-    if (decoded.studentId !== studentId) return res.status(400).json({ success: false, message: "Token mismatch" });
 
-    const form = await Form.findById(studentId);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ success: false, message: "Invalid token" });
+    }
+
+    // Use studentId from token
+    const form = await Form.findById(decoded.studentId);
     if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+
     if (otp !== "1234") return res.status(400).json({ success: false, message: "Invalid OTP" });
 
     form.otpVerified = true;
     await form.save();
 
-    const newToken = jwt.sign({ studentId, mobile: form.mobile }, JWT_SECRET, { expiresIn: "1h" });
+    const newToken = jwt.sign({ studentId: form._id.toString(), mobile: form.mobile }, JWT_SECRET, { expiresIn: "1h" });
     res.json({ success: true, message: "OTP verified", token: newToken });
   } catch (err) {
+    console.error("Error in verifyOtp:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // ------------------- PAYMENT -------------------
 
 // Create Payment

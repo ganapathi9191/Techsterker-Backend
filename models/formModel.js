@@ -11,7 +11,6 @@ const formSchema = new mongoose.Schema({
   company: { type: String },
   role: { type: String },
   experience: { type: String },
-  isPrivacyAccepted: { type: Boolean, required: true },
   otpVerified: { type: Boolean, default: false },
 }, { timestamps: true });
 
