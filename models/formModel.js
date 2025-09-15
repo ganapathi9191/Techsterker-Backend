@@ -16,7 +16,7 @@ const formSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({
-  formId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   amount: { type: Number, required: true },
   currency: { type: String, default: "INR" },

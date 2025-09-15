@@ -77,10 +77,10 @@ exports.deleteFormById = async (req, res) => {
 // Generate OTP
 exports.generateOtp = async (req, res) => {
   try {
-    const { formId } = req.params;
+    const { studentId } = req.params;
     const { mobile } = req.body;
 
-    const form = await Form.findById(formId);
+    const form = await Form.findById(studentId);
     if (!form) return res.status(404).json({ success: false, message: "Form not found" });
     if (form.mobile !== mobile) return res.status(400).json({ success: false, message: "Mobile does not match" });
 
@@ -96,22 +96,22 @@ exports.generateOtp = async (req, res) => {
 // Verify OTP
 exports.verifyOtp = async (req, res) => {
   try {
-    const { formId } = req.params;
+    const { studentId } = req.params;
     const { otp, token } = req.body;
 
     if (!token) return res.status(401).json({ success: false, message: "Token required" });
     let decoded;
     try { decoded = jwt.verify(token, JWT_SECRET); } catch { return res.status(400).json({ success: false, message: "Invalid token" }); }
-    if (decoded.formId !== formId) return res.status(400).json({ success: false, message: "Token mismatch" });
+    if (decoded.studentId !== studentId) return res.status(400).json({ success: false, message: "Token mismatch" });
 
-    const form = await Form.findById(formId);
+    const form = await Form.findById(studentId);
     if (!form) return res.status(404).json({ success: false, message: "Form not found" });
     if (otp !== "1234") return res.status(400).json({ success: false, message: "Invalid OTP" });
 
     form.otpVerified = true;
     await form.save();
 
-    const newToken = jwt.sign({ formId, mobile: form.mobile }, JWT_SECRET, { expiresIn: "1h" });
+    const newToken = jwt.sign({ studentId, mobile: form.mobile }, JWT_SECRET, { expiresIn: "1h" });
     res.json({ success: true, message: "OTP verified", token: newToken });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -123,8 +123,8 @@ exports.verifyOtp = async (req, res) => {
 // Create Payment
 exports.createPayment = async (req, res) => {
      try {
-    const { formId } = req.body;
-    const form = await Form.findById(formId).populate("courseId");
+    const { studentId } = req.body;
+    const form = await Form.findById(studentId).populate("courseId");
     if (!form) return res.status(404).json({ success: false, message: "Form not found" });
 
     const course = await Course.findById(form.courseId);
@@ -134,13 +134,13 @@ exports.createPayment = async (req, res) => {
     const options = {
       amount: course.price * 100,
       currency: "INR",
-      receipt: `rcpt_${formId}_${Date.now()}`.slice(0, 40),
+      receipt: `rcpt_${studentId}_${Date.now()}`.slice(0, 40),
     };
     const order = await razorpay.orders.create(options);
 
     // Save to DB
     const payment = await Payment.create({
-      formId,
+      studentId,
       courseId: course._id,
       amount: course.price,
       currency: "INR",
