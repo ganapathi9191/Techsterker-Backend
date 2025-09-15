@@ -11,7 +11,7 @@ exports.createCourse = async (req, res) => {
       description,
       mode,
       category,
-      subcategory,
+      price,
       duration,
       faq,
       features,
@@ -121,7 +121,7 @@ exports.createCourse = async (req, res) => {
       description,
       mode,
       category,
-      subcategory,
+      price,
       duration,
       faq: faqArray,
       features: featuresWithImages,
@@ -209,7 +209,7 @@ exports.updateCourseById = async (req, res) => {
       description,
       mode,
       category,
-      subcategory,
+      price,
       duration,
       faq,
       features,
@@ -327,7 +327,7 @@ exports.updateCourseById = async (req, res) => {
     course.description = description || course.description;
     course.mode = mode || course.mode;
     course.category = category || course.category;
-    course.subcategory = subcategory || course.subcategory;
+    course.price = price || course.price;
     course.duration = duration || course.duration;
     course.faq = faqArray.length > 0 ? faqArray : course.faq;
     course.features = featuresWithImages.length > 0 ? featuresWithImages : course.features;
