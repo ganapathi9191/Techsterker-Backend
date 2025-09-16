@@ -228,100 +228,114 @@ exports.verifyOtp = async (req, res) => {
 // Create Payment
 exports.createPayment = async (req, res) => {
    try {
-    const { studentId, paidAmount } = req.body;
+    const { studentId } = req.body;
 
-    if (!paidAmount || paidAmount <= 0) {
-      return res.status(400).json({ success: false, message: "Paid amount must be provided and greater than 0" });
+    if (!studentId) {
+      return res.status(400).json({ success: false, message: "studentId is required" });
     }
 
-    // Fetch form and course
+    // Find student form and populate course
     const form = await Form.findById(studentId).populate("courseId");
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
-
-    const course = await Course.findById(form.courseId);
-    if (!course) return res.status(404).json({ success: false, message: "Course not found" });
-
-    // Check if payment already exists
-    let payment = await Payment.findOne({ studentId, courseId: course._id });
-
-    if (payment) {
-      // Update existing payment
-      payment.paidAmount += paidAmount;
-      payment.balanceAmount = course.price - payment.paidAmount;
-      payment.paymentStatus = payment.balanceAmount <= 0 ? "paid" : "pending";
-      await payment.save();
-    } else {
-      // Create new payment
-      const order = await razorpay.orders.create({
-        amount: course.price * 100,
-        currency: "INR",
-        receipt: `rcpt_${studentId}_${Date.now()}`.slice(0, 40),
-      });
-
-      payment = await Payment.create({
-        studentId,
-        courseId: course._id,
-        amount: course.price,
-        paidAmount,
-        balanceAmount: course.price - paidAmount,
-        currency: "INR",
-        razorpayOrderId: order.id,
-        paymentStatus: paidAmount >= course.price ? "paid" : "pending",
-      });
+    if (!form) {
+      return res.status(404).json({ success: false, message: "Form not found" });
     }
 
-    res.json({
+    const course = form.courseId; // Already populated
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+
+    // Razorpay order options
+    const options = {
+      amount: Math.round(course.price * 100), // Always in paise
+      currency: "INR",
+      receipt: `rcpt_${studentId}_${Date.now()}`.slice(0, 40), // keep receipt length safe
+    };
+
+    // Create Razorpay order
+    const order = await razorpay.orders.create(options);
+
+    // Save payment record in DB
+    const payment = await Payment.create({
+      studentId: form._id,
+      courseId: course._id,
+      amount: course.price,
+      currency: "INR",
+      razorpayOrderId: order.id,
+      paymentStatus: "pending",
+    });
+
+    return res.status(201).json({
       success: true,
-      message: "Payment processed successfully",
+      message: "Payment order created",
       data: {
         paymentId: payment._id,
-        courseName: course.name,
-        totalAmount: course.price,
-        paidAmount: payment.paidAmount,
-        balanceAmount: payment.balanceAmount > 0 ? payment.balanceAmount : 0,
-        paymentStatus: payment.paymentStatus,
+        orderId: order.id,
+        amount: course.price,
         currency: "INR",
+        courseName: course.name,
+        studentName: form.fullName, // ✅ Optional - useful for frontend
       },
     });
   } catch (err) {
-    console.error("Error in createOrUpdatePayment:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Error in createPayment:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-// 2️⃣ Get All Payments
+// ✅ Update payment status
+exports.updatePaymentStatus = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { status } = req.body; // expected: "pending" or "paid"
+
+    if (!["pending", "paid"].includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    const payment = await Payment.findByIdAndUpdate(
+      paymentId,
+      { paymentStatus: status },
+      { new: true }
+    ).populate("studentId courseId");
+
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found" });
+    }
+
+    res.json({ success: true, message: "Payment status updated", data: payment });
+  } catch (err) {
+    console.error("Error updating payment status:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ✅ Get all payments
 exports.getAllPayments = async (req, res) => {
   try {
     const payments = await Payment.find()
-      .populate("studentId", "fullName email mobile")
-      .populate("courseId", "name price");
+      .populate("studentId courseId")
+      .sort({ createdAt: -1 });
 
-    res.json({
-      success: true,
-      count: payments.length,
-      data: payments,
-    });
+    res.json({ success: true, count: payments.length, data: payments });
   } catch (err) {
-    console.error("Error in getAllPayments:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Error fetching payments:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
-// 3️⃣ Get Payment by ID
+// ✅ Get payment by ID
 exports.getPaymentById = async (req, res) => {
   try {
     const { paymentId } = req.params;
-    const payment = await Payment.findById(paymentId)
-      .populate("studentId", "fullName email mobile")
-      .populate("courseId", "name price");
+    const payment = await Payment.findById(paymentId).populate("studentId courseId");
 
-    if (!payment) return res.status(404).json({ success: false, message: "Payment not found" });
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found" });
+    }
 
-    res.json({
-      success: true,
-      data: payment,
-    });
+    res.json({ success: true, data: payment });
   } catch (err) {
-    console.error("Error in getPaymentById:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Error fetching payment:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

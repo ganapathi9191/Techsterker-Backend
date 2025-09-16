@@ -15,7 +15,7 @@ const interviewRoutes = require("./routes/interviewRoute");
 const courseModuleRoutes = require('./routes/courseModuleRoutes');
 const HomeScreenRoute =require('./routes/homeScreenRoutes')
 const calendarRoutes = require("./routes/calendarRoutes");
-
+const createInvoice =require("./routes/invoiceRoutes")
 
 
 
@@ -58,7 +58,7 @@ app.use("/api", interviewRoutes);
 app.use("/api", courseModuleRoutes);
 app.use('/api',HomeScreenRoute);
 app.use("/api", calendarRoutes);
-
+app.use("/api",createInvoice);
 
 
 

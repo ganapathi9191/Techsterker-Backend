@@ -1,9 +1,8 @@
-// models/invoiceModel.js
 const mongoose = require("mongoose");
 
 const invoiceSchema = new mongoose.Schema({
   invoiceId: { type: String, unique: true },
-  formId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
   logo: { type: String }, // Cloudinary URL
   instituteName: { type: String, required: true },
   instituteAddress: { type: String, required: true },
@@ -14,7 +13,7 @@ const invoiceSchema = new mongoose.Schema({
   // Student fields
   degree: { type: String },
   department: { type: String },
-  yearOfPassing: { type: Number },
+  yearOfPassing: { type: String },
   // Professional fields
   company: { type: String },
   role: { type: String },

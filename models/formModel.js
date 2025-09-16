@@ -22,15 +22,29 @@ const formSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({
-  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
-  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
-  amount: { type: Number, required: true },       // Total course amount
-  paidAmount: { type: Number, default: 0 },       // Amount paid by student
-  balanceAmount: { type: Number, default: 0 },    // Remaining amount
-  currency: { type: String, default: "INR" },
-  razorpayOrderId: { type: String },
-  paymentStatus: { type: String, enum: ["pending", "paid"], default: "pending" },
-}, { timestamps: true });
+  studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Form",
+      required: true,
+    },
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      required: true,
+    },
+    amount: { type: Number, required: true },
+    currency: { type: String, default: "INR" },
+    razorpayOrderId: { type: String, required: true },
+    razorpayPaymentId: { type: String }, 
+    razorpaySignature: { type: String }, 
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid"], // ✅ simplified
+      default: "pending",
+    },
+  },
+  { timestamps: true }
+);
 
 const Form = mongoose.model("Form", formSchema);
 const Payment = mongoose.model("Payment", paymentSchema);
