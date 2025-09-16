@@ -1,4 +1,3 @@
-
 // models/formModel.js
 const mongoose = require("mongoose");
 
@@ -8,9 +7,17 @@ const formSchema = new mongoose.Schema({
   email: { type: String, required: true },
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   roleType: { type: String, enum: ["student", "professional"], required: true },
+
+  // Student fields
+  degree: { type: String },
+  department: { type: String },
+  yearOfPassedOut: { type: String },
+
+  // Professional fields
   company: { type: String },
   role: { type: String },
   experience: { type: String },
+
   otpVerified: { type: Boolean, default: false },
 }, { timestamps: true });
 
@@ -27,3 +34,4 @@ const Form = mongoose.model("Form", formSchema);
 const Payment = mongoose.model("Payment", paymentSchema);
 
 module.exports = { Form, Payment };
+

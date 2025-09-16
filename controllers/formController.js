@@ -17,22 +17,53 @@ const JWT_SECRET = process.env.JWT_SECRET_KEY || "supersecretkey";
 // Create Form
 exports.createForm = async (req, res) => {
   try {
-    const { fullName, mobile, email, courseId, roleType, company, role, experience, isPrivacyAccepted } = req.body;
+    const { 
+      fullName, mobile, email, courseId, roleType,
+      degree, department, yearOfPassedOut,
+      company, role, experience
+    } = req.body;
 
-    if (!isPrivacyAccepted) return res.status(400).json({ success: false, message: "Privacy must be accepted" });
-    if (roleType === "professional" && (!company || !role || !experience))
-      return res.status(400).json({ success: false, message: "Company, role, experience required for professionals" });
+    // Role type validation
+    if (roleType === "student") {
+      if (!degree || !department || !yearOfPassedOut) {
+        return res.status(400).json({
+          success: false,
+          message: "Degree, department, and yearOfPassedOut are required for students"
+        });
+      }
+    }
 
-    const form = await Form.create({ fullName, mobile, email, courseId, roleType, company, role, experience, isPrivacyAccepted });
+    if (roleType === "professional") {
+      if (!company || !role || !experience) {
+        return res.status(400).json({
+          success: false,
+          message: "Company, role, and experience are required for professionals"
+        });
+      }
+    }
+
+    const form = await Form.create({
+      fullName,
+      mobile,
+      email,
+      courseId,
+      roleType,
+      degree,
+      department,
+      yearOfPassedOut,
+      company,
+      role,
+      experience
+    });
+
     res.status(201).json({ success: true, message: "Form created", data: form });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Get all forms
 exports.getAllForms = async (req, res) => {
-  try {
+   try {
     const forms = await Form.find().populate("courseId");
     res.json({ success: true, data: forms });
   } catch (err) {
@@ -42,20 +73,66 @@ exports.getAllForms = async (req, res) => {
 
 // Get form by ID
 exports.getFormById = async (req, res) => {
-  try {
+try {
     const form = await Form.findById(req.params.id).populate("courseId");
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+    if (!form) {
+      return res.status(404).json({ success: false, message: "Form not found" });
+    }
     res.json({ success: true, data: form });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Update form
 exports.updateFormById = async (req, res) => {
-  try {
-    const form = await Form.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+   try {
+    const {
+      fullName, mobile, email, courseId, roleType,
+      degree, department, yearOfPassedOut,
+      company, role, experience
+    } = req.body;
+
+    // Role type validation
+    if (roleType === "student") {
+      if (!degree || !department || !yearOfPassedOut) {
+        return res.status(400).json({
+          success: false,
+          message: "Degree, department, and yearOfPassedOut are required for students"
+        });
+      }
+    }
+
+    if (roleType === "professional") {
+      if (!company || !role || !experience) {
+        return res.status(400).json({
+          success: false,
+          message: "Company, role, and experience are required for professionals"
+        });
+      }
+    }
+
+    const form = await Form.findByIdAndUpdate(
+      req.params.id,
+      {
+        fullName,
+        mobile,
+        email,
+        courseId,
+        roleType,
+        degree,
+        department,
+        yearOfPassedOut,
+        company,
+        role,
+        experience
+      },
+      { new: true }
+    );
+
+    if (!form) {
+      return res.status(404).json({ success: false, message: "Form not found" });
+    }
+
     res.json({ success: true, message: "Form updated", data: form });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -66,13 +143,14 @@ exports.updateFormById = async (req, res) => {
 exports.deleteFormById = async (req, res) => {
   try {
     const form = await Form.findByIdAndDelete(req.params.id);
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+    if (!form) {
+      return res.status(404).json({ success: false, message: "Form not found" });
+    }
     res.json({ success: true, message: "Form deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // ------------------- OTP -------------------
 
 // Generate OTP
