@@ -18,7 +18,6 @@ const formSchema = new mongoose.Schema({
   role: { type: String },
   experience: { type: String },
 
-  otpVerified: { type: Boolean, default: false },
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({
