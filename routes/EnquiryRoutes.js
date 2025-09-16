@@ -65,7 +65,7 @@ router.post("/verify/:formId", form.verifyOtp);
 
 
 router.post("/payment-create", form.createPayment);
-router.post("/payment-update", form.updatePaymentStatus);
-
+router.get("/payments", form.getAllPayments);
+router.get("/payment/:paymentId", form.getPaymentById);
 
 module.exports = router;

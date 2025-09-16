@@ -17,16 +17,19 @@ const formSchema = new mongoose.Schema({
   company: { type: String },
   role: { type: String },
   experience: { type: String },
-
+ // OTP verification status
+  otpVerified: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
-  amount: { type: Number, required: true },
+  amount: { type: Number, required: true },       // Total course amount
+  paidAmount: { type: Number, default: 0 },       // Amount paid by student
+  balanceAmount: { type: Number, default: 0 },    // Remaining amount
   currency: { type: String, default: "INR" },
-  paymentStatus: { type: String, enum: ["pending", "paid", "failed"], default: "pending" },
-  razorpayOrderId: { type: String }
+  razorpayOrderId: { type: String },
+  paymentStatus: { type: String, enum: ["pending", "paid"], default: "pending" },
 }, { timestamps: true });
 
 const Form = mongoose.model("Form", formSchema);
