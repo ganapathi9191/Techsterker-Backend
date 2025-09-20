@@ -18,7 +18,8 @@ const formSchema = new mongoose.Schema({
   role: { type: String },
   experience: { type: String },
  // OTP verification status
-  otpVerified: { type: Boolean, default: false }
+  otpVerified: { type: Boolean, default: false },
+  otp: { type: String } // Save OTP temporarily
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({

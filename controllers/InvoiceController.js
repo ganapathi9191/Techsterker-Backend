@@ -1,152 +1,259 @@
-// controllers/invoiceController.js
-const Invoice = require("../models/Invoicemodel");
-const {Form} = require("../models/formModel");// your existing form model
-const { uploadImages } = require("../config/cloudinary1");
-const { v4: uuidv4 } = require("uuid");
+const { Form, Payment } = require("../models/formModel");
+const PDFDocument = require("pdfkit");
+const path = require("path");
+const nodemailer = require("nodemailer");
+const twilio = require("twilio");
+const fs = require("fs");
+const fetch = require("node-fetch"); // ✅ For TinyURL
+const { uploadToCloudinary } = require("../config/cloudinary2"); // ✅ fixed Cloudinary
 
-// Generate unique invoiceId
-function generateInvoiceId() {
-  return "HICAP" + Math.floor(1000 + Math.random() * 9000); // Example: HICAP1234
+// Twilio credentials
+const TWILIO_SID = "AC6dbc0f86b6481658d4b4bc471d1dfb32";
+const TWILIO_AUTH_TOKEN = "c623dd368248f84be06e643750fae2f0";
+const TWILIO_PHONE = "+19123489710";
+
+const client = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
+
+// Helper: shorten URL for SMS
+async function shortenUrl(longUrl) {
+  try {
+    const res = await fetch(
+      "https://tinyurl.com/api-create.php?url=" + encodeURIComponent(longUrl)
+    );
+    return await res.text();
+  } catch (err) {
+    console.error("TinyURL failed:", err.message);
+    return longUrl; // fallback to original
+  }
 }
 
-exports.createInvoice = async (req, res) => {
+// Generate Invoice Function with Cloudinary Upload
+exports.generateInvoiceByStudent = async (req, res) => {
   try {
-    // Use req.body for normal fields, req.file for uploaded file
-    const { studentId, dueDate, paymentMethod, transactionId } = req.body;
-    const logoBuffer = req.file ? req.file.buffer : null;
+    const { studentId } = req.params;
 
-    if (!studentId) return res.status(400).json({ success: false, message: "studentId is required" });
-
+    // Fetch student
     const student = await Form.findById(studentId);
-    if (!student) return res.status(404).json({ success: false, message: "Student not found" });
+    if (!student)
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
 
-    // Upload logo to Cloudinary
-    let logoUrl = "";
-    if (logoBuffer) {
-      logoUrl = await uploadImages(logoBuffer, "invoice-logos");
-    }
+    // Fetch payment & course
+    const payment = await Payment.findOne({ studentId }).populate("courseId");
+    if (!payment)
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
 
-    const invoiceData = {
-      invoiceId: generateInvoiceId(),
-      studentId: student._id,
-      logo: logoUrl,
-      instituteName: "HICAP Institute",
-      instituteAddress: "123 Main Street, City, Country",
-      fullName: student.fullName,
-      mobile: student.mobile,
-      email: student.email,
-      roleType: student.roleType,
-      dueDate,
-      paymentMethod,
-      transactionId,
+    // Company Info
+    const companyInfo = {
+      name: "Techsterker",
+      contact: "+91 9000239871",
+      email: "info@techsterker.com",
+      logoPath: path.join(__dirname, "../upload/logo.png"),
     };
 
-    if (student.roleType === "student") {
-      invoiceData.degree = student.degree;
-      invoiceData.department = student.department;
-      invoiceData.yearOfPassing = student.yearOfPassedOut;
-    } else {
-      invoiceData.company = student.company;
-      invoiceData.role = student.role;
-      invoiceData.experience = student.experience;
+    // PDF setup
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    const tempDir = path.join(__dirname, "../temp");
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    const fileName = `invoice-${studentId}-${Date.now()}.pdf`;
+    const filePath = path.join(tempDir, fileName);
+
+    const writeStream = fs.createWriteStream(filePath);
+    doc.pipe(writeStream);
+
+    // ===== Header =====
+    if (fs.existsSync(companyInfo.logoPath)) {
+      doc.image(companyInfo.logoPath, 50, 45, { width: 80 });
     }
+    doc.fontSize(20).text(companyInfo.name, 140, 50);
+    doc
+      .fontSize(10)
+      .text(`Phone: ${companyInfo.contact}`, 140, 75)
+      .text(`Email: ${companyInfo.email}`, 140, 90);
 
-    const invoice = await Invoice.create(invoiceData);
-    res.status(201).json({ success: true, invoice });
+    doc.moveTo(50, 120).lineTo(550, 120).stroke();
+
+    // Bill To
+    const invoiceNumber = `TT-${Date.now()}`;
+    doc.fontSize(12).text("Bill To:", 50, 130);
+    doc
+      .fontSize(10)
+      .text(student.fullName, 50, 145)
+      .text(`+91-${student.mobile}`, 50, 160)
+      .text(student.email || "", 50, 175);
+
+    doc
+      .fontSize(10)
+      .text(`Invoice No: ${invoiceNumber}`, 400, 130)
+      .text(`Date: ${new Date().toLocaleDateString()}`, 400, 145);
+
+    // ===== Table =====
+    const tableTop = 200;
+    const itemHeight = 25;
+
+    doc.fillColor("#f0f0f0").rect(50, tableTop, 500, itemHeight).fill();
+    doc.fillColor("black").font("Helvetica-Bold");
+    doc.text("Description", 55, tableTop + 7);
+    doc.text("Quantity", 300, tableTop + 7);
+    doc.text("Unit Price", 370, tableTop + 7);
+    doc.text("Amount", 450, tableTop + 7);
+    doc.moveTo(50, tableTop).lineTo(550, tableTop).stroke();
+    doc.moveTo(50, tableTop + itemHeight).lineTo(550, tableTop + itemHeight).stroke();
+
+    const items = [
+      {
+        description: payment.courseId?.name || "Course",
+        quantity: 1,
+        unitPrice: payment.amount,
+        amount: payment.amount,
+      },
+    ];
+
+    doc.font("Helvetica").fontSize(10);
+    items.forEach((item, i) => {
+      const y = tableTop + itemHeight + i * itemHeight;
+      if (i % 2 === 0)
+        doc.rect(50, y, 500, itemHeight).fill("#f9f9f9").fillColor("black");
+
+      doc.text(item.description, 55, y + 7);
+      doc.text(item.quantity, 300, y + 7);
+      doc.text(`Rs.${item.unitPrice.toLocaleString()}/-`, 370, y + 7);
+      doc.text(`Rs.${item.amount.toLocaleString()}/-`, 450, y + 7);
+    });
+
+    // Totals
+    const totalY = tableTop + itemHeight + items.length * itemHeight + 20;
+    doc.rect(350, totalY, 200, 70).stroke();
+    doc.font("Helvetica-Bold");
+    doc.text(`Total: Rs.${payment.amount.toLocaleString()}/-`, 360, totalY + 10);
+    doc.text(`Paid: Rs.${payment.amount.toLocaleString()}/-`, 360, totalY + 25);
+    doc.text(`Balance Due: Rs.0/-`, 360, totalY + 40);
+
+    doc
+      .fontSize(8)
+      .fillColor("#666")
+      .text(
+        "Thank you for choosing Techsterker! This is a computer-generated invoice.",
+        50,
+        doc.page.height - 50
+      );
+
+    doc.end();
+
+    // ===== After PDF ready =====
+    writeStream.on("finish", async () => {
+      try {
+        console.log("PDF generated at:", filePath);
+
+        const stats = fs.statSync(filePath);
+        if (stats.size === 0) throw new Error("Generated PDF file is empty");
+
+        // Upload PDF to Cloudinary
+        const cloudinaryUrl = await uploadToCloudinary(filePath, "invoices", fileName);
+        console.log("PDF uploaded to Cloudinary:", cloudinaryUrl);
+
+        // ✅ Shorten for SMS
+        const shortUrl = await shortenUrl(cloudinaryUrl);
+
+        let emailSuccess = false,
+          smsSuccess = false;
+
+        // ===== Email =====
+        if (student.email) {
+          try {
+            const transporter = nodemailer.createTransport({
+              service: "gmail",
+              auth: {
+                user: "ganapathivaraprasad123@gmail.com",
+                pass: "eqoufkewywjrpedn", // ✅ Gmail App password
+              },
+            });
+
+            const mailOptions = {
+              from: `"Techsterker" <ganapathivaraprasad123@gmail.com>`,
+              to: student.email,
+              subject: `Invoice ${invoiceNumber} - ${payment.courseId?.name || "Course Enrollment"}`,
+              html: `
+                <h2>Invoice Ready</h2>
+                <p>Dear <b>${student.fullName}</b>, your invoice is ready.</p>
+                <p>Amount: Rs.${payment.amount}/-</p>
+                <p><a href="${cloudinaryUrl}">Download Invoice</a></p>
+              `,
+              attachments: [
+                {
+                  filename: fileName,
+                  path: filePath,
+                  contentType: "application/pdf",
+                },
+              ],
+            };
+
+            const info = await transporter.sendMail(mailOptions);
+            console.log("Email sent:", info.messageId);
+            emailSuccess = true;
+          } catch (err) {
+            console.error("Email sending failed:", err.message);
+          }
+        }
+
+        // ===== SMS =====
+        if (student.mobile) {
+          try {
+            const smsMessage = `Hi ${student.fullName}, Invoice ${invoiceNumber} for ${payment.courseId?.name} (Rs.${payment.amount}/-) Download: ${shortUrl}`;
+
+            const smsResult = await client.messages.create({
+              body: smsMessage,
+              from: TWILIO_PHONE,
+              to: `+91${student.mobile}`,
+            });
+
+            console.log("SMS sent:", smsResult.sid);
+            smsSuccess = true;
+          } catch (err) {
+            console.error("SMS sending failed:", err.message);
+          }
+        }
+
+        // Clean up file
+        setTimeout(() => {
+          fs.unlink(filePath, (err) => {
+            if (err) console.error("Cleanup failed:", err.message);
+          });
+        }, 5000);
+
+        // Send response
+        res.status(200).json({
+          success: true,
+          message: "Invoice generated and sent successfully",
+          data: {
+            invoiceNumber,
+            pdfUrl: cloudinaryUrl,
+            notifications: { emailSent: emailSuccess, smsSent: smsSuccess },
+          },
+        });
+      } catch (err) {
+        console.error("Post-PDF process error:", err.message);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        if (!res.headersSent)
+          res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+    writeStream.on("error", (err) => {
+      console.error("PDF stream error:", err.message);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (!res.headersSent)
+        res
+          .status(500)
+          .json({ success: false, message: "Failed to generate PDF" });
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-};
-
-exports.generateInvoiceHTML = (invoice) => {
-  return `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <title>Invoice ${invoice.invoiceId}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; }
-      .header { display: flex; justify-content: space-between; align-items: center; }
-      .logo { width: 150px; }
-      .info { margin-top: 20px; }
-      .info h2 { margin: 5px 0; }
-      .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-      .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-      .table th { background-color: #f2f2f2; }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <img src="${invoice.logo}" class="logo" />
-      <div>
-        <h1>${invoice.instituteName}</h1>
-        <p>${invoice.instituteAddress}</p>
-      </div>
-    </div>
-
-    <div class="info">
-      <h2>Invoice ID: ${invoice.invoiceId}</h2>
-      <p>Name: ${invoice.fullName}</p>
-      <p>Email: ${invoice.email}</p>
-      <p>Mobile: ${invoice.mobile}</p>
-      <p>Status: ${invoice.status}</p>
-      <p>Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}</p>
-      <p>Payment Method: ${invoice.paymentMethod}</p>
-      <p>Transaction ID: ${invoice.transactionId || "-"}</p>
-    </div>
-
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${invoice.roleType === "student" ? `
-          <tr><td>Degree</td><td>${invoice.degree}</td></tr>
-          <tr><td>Department</td><td>${invoice.department}</td></tr>
-          <tr><td>Year of Passing</td><td>${invoice.yearOfPassing}</td></tr>
-        ` : `
-          <tr><td>Company</td><td>${invoice.company}</td></tr>
-          <tr><td>Role</td><td>${invoice.role}</td></tr>
-          <tr><td>Experience</td><td>${invoice.experience}</td></tr>
-        `}
-      </tbody>
-    </table>
-  </body>
-  </html>
-  `;
-};
-
-// GET ALL INVOICES
-exports.getAllInvoices = async (req, res) => {
-  try {
-    const invoices = await Invoice.find()
-      .populate("studentId", "fullName email mobile roleType degree department yearOfPassedOut company role experience"); 
-      // populates student fields selectively
-
-    res.status(200).json({ success: true, count: invoices.length, invoices });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-};
-
-// GET INVOICE BY ID
-exports.getInvoiceById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const invoice = await Invoice.findById(id)
-      .populate("studentId", "fullName email mobile roleType degree department yearOfPassedOut company role experience");
-
-    if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
-
-    res.status(200).json({ success: true, invoice });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
+    console.error("Invoice generation error:", err.message);
+    if (!res.headersSent)
+      res.status(500).json({ success: false, message: err.message });
   }
 };

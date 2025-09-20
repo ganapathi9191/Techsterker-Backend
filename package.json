@@ -34,6 +34,7 @@
     "firebase-admin": "^13.5.0",
     "formidable": "^3.5.4",
     "helmet": "^8.1.0",
+    "html-pdf": "^3.0.1",
     "i18n": "^0.15.1",
     "i18next": "^25.4.2",
     "i18next-express-middleware": "^2.0.0",
@@ -52,9 +53,10 @@
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
+    "stream-buffers": "^3.0.3",
     "stream-to-buffer": "^0.1.0",
     "streamifier": "^0.1.1",
-    "twilio": "^5.8.2"
+    "twilio": "^5.10.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

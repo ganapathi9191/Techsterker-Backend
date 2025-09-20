@@ -3,6 +3,17 @@ const { uploadToCloudinary} = require("../config/cloudinary1");
 const mongoose = require("mongoose");
 require("dotenv").config();
 const twilio = require("twilio");
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.JWT_SECRET_KEY; 
+
+// Twilio credentials
+const TWILIO_SID = "AC6dbc0f86b6481658d4b4bc471d1dfb32";
+const TWILIO_AUTH_TOKEN = "c623dd368248f84be06e643750fae2f0";
+const TWILIO_PHONE = "+19123489710";
+
+const client = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
+
+
 
 exports.createCourse = async (req, res) => {
   try {
@@ -372,58 +383,103 @@ exports.deleteCourseById = async (req, res) => {
 
 // POST /api/send-otp
 exports.sendOtp = async (req, res) => {
-  try {
+    try {
     const { name, phoneNumber, syllabus } = req.body;
     if (!name || !phoneNumber) {
-      return res.status(400).json({ success: false, message: "Name and phone number required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Name and phone number required" });
     }
 
-    const otp = "1234";
-    const expiresAt = new Date(Date.now() + 90 * 1000);
+    // Generate 4-digit random OTP
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds
 
+    // Save OTP in DB
     await DownloadUser.findOneAndUpdate(
       { phoneNumber },
       { name, syllabus, otp, expiresAt, verified: false },
       { upsert: true, new: true }
     );
 
-    return res.status(200).json({
-      success: true,
-      message: "OTP generated successfully (use 1234 for verification)"
+    // Send OTP via SMS
+    await client.messages.create({
+      body: `Your OTP is ${otp}. It will expire in 90 seconds.`,
+      from: TWILIO_PHONE,
+      to: phoneNumber, // phone number must be in E.164 format (+91XXXXXXXXXX)
     });
+
+    return res
+      .status(200)
+      .json({ success: true, message: "OTP sent successfully via SMS" });
   } catch (error) {
     console.error("Error generating OTP:", error);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
   }
 };
 
 // POST /api/verify-otp
 exports.verifyOtp = async (req, res) => {
-  try {
+   try {
     const { phoneNumber, otp } = req.body;
     if (!phoneNumber || !otp) {
-      return res.status(400).json({ success: false, message: "Phone number and OTP required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Phone number and OTP required" });
     }
 
     const record = await DownloadUser.findOne({ phoneNumber });
-    if (!record) return res.status(400).json({ success: false, message: "No OTP found for this phone" });
+    if (!record)
+      return res
+        .status(400)
+        .json({ success: false, message: "No OTP found for this phone" });
 
-    if (record.verified) return res.status(400).json({ success: false, message: "OTP already used" });
+    if (record.verified)
+      return res
+        .status(400)
+        .json({ success: false, message: "OTP already used" });
 
-    if (record.expiresAt < new Date()) return res.status(400).json({ success: false, message: "OTP expired" });
+    if (record.expiresAt < new Date())
+      return res
+        .status(400)
+        .json({ success: false, message: "OTP expired" });
 
-    if (otp !== "1234") return res.status(400).json({ success: false, message: "Invalid OTP" });
+    if (otp !== record.otp)
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid OTP" });
 
+    // Mark as verified
     record.verified = true;
     await record.save();
 
-    return res.status(200).json({ success: true, message: "OTP verified successfully" });
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: record._id, phoneNumber: record.phoneNumber },
+      JWT_SECRET,
+      { expiresIn: "1h" } // 1 hour token
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully",
+      token,
+      user: {
+        id: record._id,
+        name: record.name,
+        phoneNumber: record.phoneNumber,
+        syllabus: record.syllabus
+      }
+    });
   } catch (error) {
     console.error("Error verifying OTP:", error);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
   }
 };
-
 // GET /api/users
 exports.getAllUsers = async (req, res) => {
   try {

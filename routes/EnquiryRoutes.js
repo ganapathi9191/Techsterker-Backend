@@ -5,6 +5,7 @@ const upload = require('../utils/uploadMiddleware'); // multer middleware
 const contactus = require('../controllers/EnquiryController');
 const doubtSessionController = require("../controllers/doubtSessionController");
 const form=require('../controllers/formController');
+const { validateOtpRequest, validateOtpVerification } = require("../utils/validateInput");
 
 router.post('/Enquiry', contactus.createEnquiry);
 router.get('/Enquiry', contactus.getEnquiries);
@@ -60,8 +61,8 @@ router.delete("/form/:id", form.deleteFormById);      // Delete By ID
 
 
 // formId in params, mobile in body
-router.post("/generate/:formId", form.generateOtp);
-router.post("/verify/:formId", form.verifyOtp);
+router.post("/generate", form.generateOtp);
+router.post("/verify", form.verifyOtp);
 
 
 router.post("/payment-create", form.createPayment);

@@ -4,13 +4,29 @@ const Razorpay = require("razorpay");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+const twilio = require("twilio");
 
+const JWT_SECRET = process.env.JWT_SECRET_KEY;
+
+// Twilio credentials
+const TWILIO_SID = "AC6dbc0f86b6481658d4b4bc471d1dfb32";
+const TWILIO_AUTH_TOKEN = "c623dd368248f84be06e643750fae2f0";
+const TWILIO_PHONE = "+19123489710";
+
+
+const client = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
+
+// Utility to format number for Twilio
+function formatNumber(number) {
+  if (!number) return null;
+  if (number.startsWith("+")) return number;
+  return "+91" + number; // assuming Indian numbers
+}
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_RHlt1aNxIRxsUa",
   key_secret: process.env.RAZORPAY_KEY_SECRET || "d2skF5Am9n5PLn17DuvOzjRW",
 });
 
-const JWT_SECRET = process.env.JWT_SECRET_KEY || "supersecretkey";
 
 // ------------------- FORM -------------------
 
@@ -153,76 +169,182 @@ exports.deleteFormById = async (req, res) => {
 };
 // ------------------- OTP -------------------
 
-// Generate OTP
+
+ 
+// Generate and send OTP
 exports.generateOtp = async (req, res) => {
- try {
-    const { studentId } = req.params; // can be _id or mobile
-    const { mobile } = req.body;
+  try {
+    const { studentId } = req.body;
 
-    let form;
-
-    // First try to find by _id
-    if (mongoose.Types.ObjectId.isValid(studentId)) {
-      form = await Form.findById(studentId);
+    if (!studentId || !mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ success: false, message: "Valid studentId is required" });
     }
 
-    // If not found by _id, try by mobile
-    if (!form && mobile) {
-      form = await Form.findOne({ mobile });
+    const form = await Form.findById(studentId);
+
+    if (!form) {
+      return res.status(404).json({ success: false, message: "Student record not found" });
     }
 
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+    // Check if mobile number exists and is valid (ONLY essential check)
+    if (!form.mobile || form.mobile.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Mobile number is required to send OTP"
+      });
+    }
 
-    // Ensure mobile matches if provided
-    if (mobile && form.mobile !== mobile) 
-      return res.status(400).json({ success: false, message: "Mobile does not match" });
+    // Validate mobile number format (basic validation)
+    const mobileRegex = /^[6-9]\d{9}$/; // Indian mobile numbers
+    const cleanMobile = form.mobile.replace(/[+\s-]/g, '');
+    
+    if (!mobileRegex.test(cleanMobile)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid mobile number format. Please provide a valid 10-digit Indian mobile number."
+      });
+    }
 
-    const otp = "1234"; // fixed OTP
-    const token = jwt.sign({ studentId: form._id.toString(), mobile: form.mobile }, JWT_SECRET, { expiresIn: "10m" });
+    // Generate 4-digit OTP
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    res.json({ success: true, message: "OTP generated", otp, token });
+    // Save OTP temporarily in DB
+    form.otp = otp;
+    form.otpVerified = false;
+    form.otpGeneratedAt = new Date();
+    await form.save();
+
+    // Send SMS via Twilio
+    const toNumber = formatNumber(form.mobile);
+    try {
+      // Use student name if available, otherwise generic message
+      const message = form.name 
+        ? `Hello ${form.name}, your OTP is ${otp}. Valid for 10 minutes.`
+        : `Your OTP is ${otp}. Valid for 10 minutes.`;
+      
+      await client.messages.create({
+        body: message,
+        from: TWILIO_PHONE,
+        to: toNumber
+      });
+    } catch (twilioError) {
+      console.error("Twilio error:", twilioError);
+      
+      // Clear OTP since sending failed
+      form.otp = null;
+      form.otpGeneratedAt = null;
+      await form.save();
+
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to send SMS. Please check the mobile number format."
+      });
+    }
+
+    // JWT token for OTP verification
+    const token = jwt.sign({ 
+      studentId: form._id.toString(),
+      mobile: form.mobile
+    }, JWT_SECRET, { expiresIn: "10m" });
+
+    res.json({
+      success: true,
+      message: `OTP sent via SMS to ${form.mobile}`,
+      token,
+      mobile: form.mobile
+    });
+
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Error in generateOtp:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
   }
 };
 // Verify OTP
 exports.verifyOtp = async (req, res) => {
-  try {
+   try {
     const { otp, token } = req.body;
 
-    if (!token) return res.status(401).json({ success: false, message: "Token required" });
+    if (!otp || !token) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "OTP and token are required"
+      });
+    }
 
     let decoded;
     try {
       decoded = jwt.verify(token, JWT_SECRET);
     } catch (err) {
-      return res.status(400).json({ success: false, message: "Invalid token" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid or expired token" 
+      });
     }
 
     const form = await Form.findById(decoded.studentId);
-    if (!form) return res.status(404).json({ success: false, message: "Form not found" });
+    if (!form) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Student record not found" 
+      });
+    }
 
-    if (otp !== "1234") return res.status(400).json({ success: false, message: "Invalid OTP" });
+    // Check if OTP exists and matches
+    if (!form.otp || form.otp !== otp) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid OTP" 
+      });
+    }
 
-    // Mark OTP as verified
+    // Check if OTP is expired (10 minutes)
+    if (form.otpGeneratedAt) {
+      const otpAge = new Date() - new Date(form.otpGeneratedAt);
+      const tenMinutes = 10 * 60 * 1000;
+      
+      if (otpAge > tenMinutes) {
+        form.otp = null;
+        form.otpGeneratedAt = null;
+        await form.save();
+        
+        return res.status(400).json({ 
+          success: false, 
+          message: "OTP has expired" 
+        });
+      }
+    }
+
+    // OTP is correct
     form.otpVerified = true;
+    form.otp = null;
+    form.otpGeneratedAt = null;
     await form.save();
 
-    const newToken = jwt.sign({ studentId: form._id.toString(), mobile: form.mobile }, JWT_SECRET, { expiresIn: "1h" });
+    // Issue new token
+    const newToken = jwt.sign({ 
+      studentId: form._id.toString(),
+      mobile: form.mobile
+    }, JWT_SECRET, { expiresIn: "1h" });
 
     res.json({
       success: true,
-      message: "OTP verified",
-      otpVerified: form.otpVerified, // now shows true
-      token: newToken
+      message: "OTP verified successfully",
+      otpVerified: true,
+      token: newToken,
+      studentId: form._id
     });
+
   } catch (err) {
     console.error("Error in verifyOtp:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
   }
 };
-
-
 // ------------------- PAYMENT -------------------
 
 // Create Payment
@@ -262,7 +384,7 @@ exports.createPayment = async (req, res) => {
       amount: course.price,
       currency: "INR",
       razorpayOrderId: order.id,
-      paymentStatus: "pending",
+      paymentStatus: "paid",
     });
 
     return res.status(201).json({

@@ -1,12 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const invoiceController = require("../controllers/InvoiceController");
+const validateObjectId = require("../utils/validateObjectId"); // Add this import
 const multer = require("multer");
-const createInvoice = require("../controllers/InvoiceController");
-
-const upload = multer(); // stores file in memory as buffer
-
-router.post("/createInvoice", upload.single("logoFile"), createInvoice.createInvoice);
-router.get("/getAllInvoices", createInvoice.getAllInvoices);
-router.get("/getInvoiceById/:id", createInvoice.getInvoiceById);
+// Configure multer for file uploads
+// Get Invoice as PDF
+router.post("/student/:studentId/pdf", invoiceController.generateInvoiceByStudent);
 
 module.exports = router;

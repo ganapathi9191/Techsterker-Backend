@@ -1,27 +1,28 @@
 const mongoose = require("mongoose");
 
 const invoiceSchema = new mongoose.Schema({
-  invoiceId: { type: String, unique: true },
+  invoiceNumber: { type: String, required: true, unique: true },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Form", required: true },
-  logo: { type: String }, // Cloudinary URL
-  instituteName: { type: String, required: true },
-  instituteAddress: { type: String, required: true },
-  fullName: { type: String, required: true },
-  mobile: { type: String },
-  email: { type: String },
-  roleType: { type: String, enum: ["student", "professional"], required: true },
-  // Student fields
-  degree: { type: String },
-  department: { type: String },
-  yearOfPassing: { type: String },
-  // Professional fields
-  company: { type: String },
-  role: { type: String },
-  experience: { type: String },
-  status: { type: String, enum: ["unpaid", "paid", "pending"], default: "unpaid" },
+  paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", required: true },
+  issueDate: { type: Date, default: Date.now },
   dueDate: { type: Date, required: true },
-  paymentMethod: { type: String, enum: ["upi", "card", "bank", "cash"], default: "cash" },
-  transactionId: { type: String },
+  items: [{
+    description: { type: String, required: true },
+    quantity: { type: Number, default: 1 },
+    unitPrice: { type: Number, required: true },
+    amount: { type: Number, required: true }
+  }],
+  subtotal: { type: Number, required: true },
+  total: { type: Number, required: true },
+  status: { type: String, enum: ["draft", "sent", "paid", "overdue"], default: "draft" },
+  notes: { type: String },
+  logoUrl: { type: String },
+  companyInfo: {
+    name: { type: String },
+    address: { type: String },
+    contact: { type: String },
+    taxId: { type: String }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Invoice", invoiceSchema);
