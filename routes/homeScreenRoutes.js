@@ -191,10 +191,10 @@ router.delete('/Courses/:id', homeScreenController.deleteHomeCourses);
 
 // Routes
 router.post(
-  "/courseController", upload.any(),
+  "/create-course", upload.any(),
   courseController.createCourse
 );
-router.get("/courseController", courseController.getAllCourses);
+router.get("/allcourses", courseController.getAllCourses);
 router.get('/courseControllers', courseController.getAllCourses);
 router.get('/courseController/:id', courseController.getCourseById);
 router.get('/courseController/category/:category', courseController.getCourseByCategory);

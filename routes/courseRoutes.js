@@ -6,15 +6,15 @@ const upload = multer({ storage });
 const enrollmentController = require('../controllers/enrollmentController');
 
 // Enrollment routes
-router.post('/enrollments', enrollmentController.createEnrollment);
-router.get('/enrollments', enrollmentController.getAllEnrollments);
+router.post('/create-enrollment', enrollmentController.createEnrollment);
+router.get('/allenrollments', enrollmentController.getAllEnrollments);
 router.get("/enrollment/:id", enrollmentController.getEnrollmentById);
 router.put('/enrollments/:id', enrollmentController.updateEnrolledByUserId);
 router.delete('/enrollments/:id', enrollmentController.deleteEnrollmentById);
 
 // User enrollment routes
 router.post('/enrollments/add-user', enrollmentController.addEnrollmentToUser);
-router.get('/user/:userId/enrollments', enrollmentController.getEnrollmentsByUserId);
+router.get('/userenrollments/:userId', enrollmentController.getEnrollmentsByUserId);
 
 // Mentor enrollment routes
 // ➕ Add mentor to enrollment

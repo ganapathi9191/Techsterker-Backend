@@ -4,12 +4,13 @@ const mongoose = require('mongoose');
 const userRegister = require("../models/registerUser"); 
 const {Course} = require("../models/coursesModel");
 const { OurMentor, MentorExperience ,Mentor} = require("../models/ourMentors");
-
+const { format } = require('date-fns');  // Import the 'format' function from date-fns
 // ➕ Create new enrollment
 exports.createEnrollment = async (req, res) => {
   try {
-    const { batchNumber, batchName, courseId, startDate, timings, duration, category } = req.body;
+    const { batchNumber, batchName, courseId, startDate, timings, duration, category, status } = req.body;
 
+    // Validate required fields
     if (!batchNumber || !batchName || !courseId || !startDate || !timings || !duration || !category) {
       return res.status(400).json({
         success: false,
@@ -27,6 +28,10 @@ exports.createEnrollment = async (req, res) => {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
 
+    // Set default status if not provided in request
+    const enrollmentStatus = status || 'Upcoming';  // Default to "Upcoming" if no status provided
+
+    // Create new enrollment
     const enrollment = new Enrollment({
       batchNumber,
       batchName,
@@ -34,10 +39,14 @@ exports.createEnrollment = async (req, res) => {
       startDate,
       timings,
       duration,
-      category
+      category,
+      status: enrollmentStatus  // Include status
     });
 
+    // Save enrollment to database
     const savedEnrollment = await enrollment.save();
+
+    // Populate the saved enrollment with course details
     const populatedEnrollment = await Enrollment.findById(savedEnrollment._id).populate("courseId");
 
     return res.status(201).json({
@@ -50,6 +59,8 @@ exports.createEnrollment = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+
 // 📖 Get all enrollments
 exports.getAllEnrollments = async (req, res) => {
   try {
@@ -400,7 +411,13 @@ exports.addEnrollmentToUser = async (req, res) => {
       await user.save();
     }
 
-    // 5️⃣ Populate enrolled users before sending response
+    // 5️⃣ Update user.isEnrolledStatus to true
+    if (!user.isEnrolledStatus) {
+      user.isEnrolledStatus = true;
+      await user.save();
+    }
+
+    // 6️⃣ Populate enrolled users before sending response
     const updatedEnrollment = await Enrollment.findById(enrollmentId)
       .populate('enrolledUsers', 'fullName email');
 
@@ -443,6 +460,14 @@ exports.getEnrollmentsByUserId = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    // Format startDate in each enrolled course to a readable format (DD MMM YYYY)
+    const formattedCourses = user.enrolledCourses.map(course => {
+      return {
+        ...course.toObject(),  // Convert Mongoose document to plain object
+        startDate: course.startDate ? format(new Date(course.startDate), 'dd MMM yyyy') : null  // Format the startDate
+      };
+    });
+
     res.status(200).json({
       success: true,
       user: {
@@ -451,13 +476,15 @@ exports.getEnrollmentsByUserId = async (req, res) => {
         email: user.email,
         phoneNumber: user.phoneNumber
       },
-      enrolledCourses: user.enrolledCourses
+      enrolledCourses: formattedCourses
     });
   } catch (error) {
     console.error("Error fetching enrolled courses:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+
 
 exports.addMentorToEnrollment = async (req, res) => {
   try {

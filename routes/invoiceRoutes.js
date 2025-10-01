@@ -5,6 +5,6 @@ const validateObjectId = require("../utils/validateObjectId"); // Add this impor
 const multer = require("multer");
 // Configure multer for file uploads
 // Get Invoice as PDF
-router.post("/student/:studentId/pdf", invoiceController.generateInvoiceByStudent);
+router.post("/getinvoice/:studentId", invoiceController.generateInvoiceByStudent);
 
 module.exports = router;

@@ -14,7 +14,12 @@ const enrollmentSchema = new mongoose.Schema({
   }],
   enrolledUsers: [
     { type: mongoose.Schema.Types.ObjectId, ref: "userRegister" }
-  ]
+  ],
+   status: { 
+    type: String, 
+    enum: ['Upcoming', 'Ongoing', 'Completed'], 
+    default: 'Upcoming' // Default is "Upcoming"
+  },
 }, { timestamps: true });
 
 // Certificate Schema

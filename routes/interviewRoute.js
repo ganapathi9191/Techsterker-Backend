@@ -3,7 +3,7 @@ const router = express.Router();
 const interviewController = require('../controllers/interviewController');
 
 // CREATE INTERVIEW based on enrolledId (auto-links to user)
-router.post('/interview', interviewController.createInterview);
+router.post('/add-interview', interviewController.createInterview);
 // GET ALL INTERVIEWS
 router.get('/interviews', interviewController.getAllInterviews);
 

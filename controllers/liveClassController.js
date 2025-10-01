@@ -77,13 +77,13 @@ exports.createLiveClass = async (req, res) => {
       }
     }
 
-    // Check if the mentor is assigned to this enrollment
-    if (!enrollment.assignedMentors || !enrollment.assignedMentors.includes(finalMentorId)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Mentor with ID ${finalMentorId} is not assigned to this enrollment. Available mentors for this enrollment: ${enrollment.assignedMentors ? enrollment.assignedMentors.join(', ') : 'None'}` 
-      });
-    }
+    // // Check if the mentor is assigned to this enrollment
+    // if (!enrollment.assignedMentors || !enrollment.assignedMentors.includes(finalMentorId)) {
+    //   return res.status(400).json({ 
+    //     success: false, 
+    //     message: `Mentor with ID ${finalMentorId} is not assigned to this enrollment. Available mentors for this enrollment: ${enrollment.assignedMentors ? enrollment.assignedMentors.join(', ') : 'None'}` 
+    //   });
+    // }
 
     // Check if mentor exists
     const mentor = await Mentor.findById(finalMentorId);

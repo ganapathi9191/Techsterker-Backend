@@ -5,9 +5,10 @@ const liveClassController = require("../controllers/liveClassController");
 
 
 router.post('/userregister',users.register);
+router.get('/usercourse/:userId', users.getRegisteredCourseDetails);
 router.post('/userlogin', users.login);
 // Read
-router.get('/userregister', users.getAllUsers);
+router.get('/allusers', users.getAllUsers);
 router.get('/userregister/:id', users.getUserById);
 
 // Update
@@ -25,7 +26,7 @@ router.get('/recommend-courses/:userId', users.getRecommendedCourses);
 
 
 // ➕ CREATE LIVE CLASS
-router.post('/liveclass', liveClassController.createLiveClass);
+router.post('/createliveclass', liveClassController.createLiveClass);
 router.get('/liveclass', liveClassController.getAllLiveClasses);
 router.get('/liveclass/:id', liveClassController.getLiveClassById);
 router.put('/liveclass/:id', liveClassController.updateLiveClassById);
@@ -35,6 +36,9 @@ router.delete('/liveclass/:id', liveClassController.deleteLiveClassById);
 router.get('/liveclass/mentor/:mentorId', liveClassController.getLiveClassesByMentorId);
 router.get('/liveclass/enrollment/:enrollmentId', liveClassController.getLiveClassesByEnrollmentId);
 router.get('/live-classes/user/:userId', liveClassController.getLiveClassesByUserId);
+
+router.get('/userpayments',users.getAllPayments);
+
 
 
 module.exports = router;

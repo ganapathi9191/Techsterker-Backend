@@ -27,31 +27,57 @@ exports.createCourse = async (req, res) => {
       faq,
       features,
       reviews,
-      toolsImages,
       noOfLessons = 0,
       noOfStudents = 0
     } = req.body;
 
-    // Parse JSON fields
-    const faqArray = faq ? JSON.parse(faq) : [];
-    const featuresArray = features ? JSON.parse(features) : [];
-    let reviewsArray = reviews ? JSON.parse(reviews) : [];
+    console.log("Received body:", req.body);
+    console.log("Received files:", req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : "No files");
+
+    // Parse JSON fields with error handling
+    let faqArray = [];
+    let featuresArray = [];
+    let reviewsArray = [];
+
+    try {
+      faqArray = faq ? JSON.parse(faq) : [];
+    } catch (error) {
+      console.error("Error parsing FAQ:", error);
+      return res.status(400).json({ success: false, message: "Invalid FAQ format" });
+    }
+
+    try {
+      featuresArray = features ? JSON.parse(features) : [];
+    } catch (error) {
+      console.error("Error parsing features:", error);
+      return res.status(400).json({ success: false, message: "Invalid features format" });
+    }
+
+    try {
+      reviewsArray = reviews ? JSON.parse(reviews) : [];
+    } catch (error) {
+      console.error("Error parsing reviews:", error);
+      return res.status(400).json({ success: false, message: "Invalid reviews format" });
+    }
 
     // Extract files
     const files = req.files || [];
-    console.log("Uploaded files:", files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
 
     const mainImageFile = files.find(file => file.fieldname === "image");
     const logoFile = files.find(file => file.fieldname === "logoImage");
     const pdfFile = files.find(file => file.fieldname === "pdf");
-    const featureFiles = files.filter(file => file.fieldname === "featureImages" || file.fieldname === "featureImages[]");
-    const toolsFiles = files.filter(file => file.fieldname === "toolsImages" || file.fieldname === "toolsImages[]");
-    const reviewFiles = files.filter(file =>
-      file.fieldname === "reviewImages" ||
-      file.fieldname === "reviewImages[]" ||
-      file.fieldname === "reviewImage" ||
-      file.fieldname === "reviewImage[]"
-    );
+    const featureFiles = files.filter(file => file.fieldname === "featureImages");
+    const toolsFiles = files.filter(file => file.fieldname === "toolsImages");
+    const reviewFiles = files.filter(file => file.fieldname === "reviewImages");
+
+    console.log("File counts:", {
+      mainImage: mainImageFile ? 1 : 0,
+      logo: logoFile ? 1 : 0,
+      pdf: pdfFile ? 1 : 0,
+      features: featureFiles.length,
+      tools: toolsFiles.length,
+      reviews: reviewFiles.length
+    });
 
     // Upload main image (required)
     if (!mainImageFile) {
@@ -68,25 +94,25 @@ exports.createCourse = async (req, res) => {
     // Upload pdf (optional)
     let pdfUrl = null;
     if (pdfFile) {
-      if (pdfFile.mimetype !== "application/pdf") {
-        return res.status(400).json({
-          success: false,
-          message: "Only PDF format is allowed for course PDF"
-        });
-      }
       pdfUrl = await uploadToCloudinary(pdfFile.buffer, "courses/pdf", pdfFile.originalname);
     }
 
-    // Upload feature images
-    const featureImageUrls = [];
-    for (const file of featureFiles) {
-      const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/features", file.originalname);
-      featureImageUrls.push(uploadedUrl);
+    // Upload feature images and map to features
+    const featuresWithImages = [];
+    for (let i = 0; i < featuresArray.length; i++) {
+      const feature = featuresArray[i];
+      const featureFile = featureFiles[i];
+      
+      let featureImageUrl = null;
+      if (featureFile) {
+        featureImageUrl = await uploadToCloudinary(featureFile.buffer, "courses/features", featureFile.originalname);
+      }
+
+      featuresWithImages.push({
+        ...feature,
+        image: featureImageUrl
+      });
     }
-    const featuresWithImages = featuresArray.map((feature, index) => ({
-      ...feature,
-      image: featureImageUrls[index] || null
-    }));
 
     // Upload tools images
     const toolsImageUrls = [];
@@ -95,34 +121,35 @@ exports.createCourse = async (req, res) => {
       toolsImageUrls.push(uploadedUrl);
     }
 
-    // Upload review images
-    const reviewImageUrls = [];
-    for (const file of reviewFiles) {
-      const uploadedUrl = await uploadToCloudinary(file.buffer, "courses/reviews", file.originalname);
-      reviewImageUrls.push(uploadedUrl);
-    }
+    // Upload review images and map to reviews
+    const reviewsWithImages = [];
+    for (let i = 0; i < reviewsArray.length; i++) {
+      const review = reviewsArray[i];
+      const reviewFile = reviewFiles[i];
+      
+      let reviewImageUrl = null;
+      if (reviewFile) {
+        reviewImageUrl = await uploadToCloudinary(reviewFile.buffer, "courses/reviews", reviewFile.originalname);
+      }
 
-    // Map review images to reviews
-    reviewsArray = reviewsArray.map((review, index) => ({
-      ...review,
-      image: reviewImageUrls[index] || null
-    }));
-
-    // Validate reviews
-    const reviewsWithoutImages = reviewsArray.filter(r => !r.image);
-    if (reviewsWithoutImages.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Each review must have an image uploaded",
-        missingImagesForReviews: reviewsWithoutImages.map(r => r.name)
+      reviewsWithImages.push({
+        ...review,
+        image: reviewImageUrl
       });
     }
-    if (reviewImageUrls.length !== reviewsArray.length) {
+
+    // Validate that we have images for all features and reviews
+    if (featuresWithImages.length !== featuresArray.length) {
       return res.status(400).json({
         success: false,
-        message: "Number of review images must match number of reviews",
-        reviewsCount: reviewsArray.length,
-        reviewImagesCount: reviewImageUrls.length
+        message: "Number of feature images doesn't match number of features"
+      });
+    }
+
+    if (reviewsWithImages.length !== reviewsArray.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Number of review images doesn't match number of reviews"
       });
     }
 
@@ -132,17 +159,17 @@ exports.createCourse = async (req, res) => {
       description,
       mode,
       category,
-      price,
+      price: parseFloat(price),
       duration,
       faq: faqArray,
       features: featuresWithImages,
-      reviews: reviewsArray,
+      reviews: reviewsWithImages,
       image: courseImageUrl,
       logoImage: logoImageUrl,
       pdf: pdfUrl,
       toolsImages: toolsImageUrls,
-      noOfLessons,
-      noOfStudents
+      noOfLessons: parseInt(noOfLessons) || 0,
+      noOfStudents: parseInt(noOfStudents) || 0
     });
 
     await course.save();

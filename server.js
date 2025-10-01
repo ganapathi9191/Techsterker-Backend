@@ -19,6 +19,7 @@ const courseModuleRoutes = require('./routes/courseModuleRoutes');
 const HomeScreenRoute = require('./routes/homeScreenRoutes');
 const calendarRoutes = require("./routes/calendarRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes"); // Fixed variable name
+const adminRoutes = require("./routes/AdminRoute"); // Fixed variable name
 
 // Import utils
 const cleanupLegacyIndexes = require('./utils/invoiceTemplate');
@@ -37,7 +38,7 @@ app.use(cors());
 app.use(express.json());
 
 // Static file serving
-app.use('/api/course-module/uploads/videos', express.static(path.join(__dirname, 'uploads/videos')));
+//app.use('/api/course-module/uploads/videos', express.static(path.join(__dirname, 'uploads/videos')));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
@@ -69,6 +70,14 @@ mongoose.connection.on('disconnected', () => {
 // Attach Socket.IO to app
 app.set('io', io);
 
+
+// Serve static files from multiple directories
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/invoices', express.static(path.join(__dirname, 'uploads/invoices')));
+
+
+
+
 // ✅ Routes
 app.use("/api", aboutRoutes);
 app.use('/api', enquiryRoutes);
@@ -83,6 +92,7 @@ app.use("/api", courseModuleRoutes);
 app.use('/api', HomeScreenRoute);
 app.use("/api", calendarRoutes);
 app.use("/api", invoiceRoutes); // Use the correct variable name
+app.use("/api/admin", adminRoutes); // Use the correct variable name
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -109,6 +119,11 @@ app.use((err, req, res, next) => {
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong' 
   });
 });
+
+
+
+// Serve static files (like PDFs) from the 'uploads' folder
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Socket.IO connection
 io.on('connection', (socket) => {
