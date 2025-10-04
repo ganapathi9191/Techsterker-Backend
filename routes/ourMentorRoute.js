@@ -31,7 +31,7 @@ router.delete("/experience/:id", mentorController.deleteMentorExperience);
 // 🔧 OUR MENTOR ROUTES - define AFTER specific routes
 router.post("/Mentor", upload.single("image"), mentorController.createMentor);
 router.get("/Mentor", mentorController.getAllMentors);
-router.get("/Mentor/:id", mentorController.getMentorById);
+router.get("/profile/:id", mentorController.getMentorById);
 router.put("/Mentor/:id", upload.single("image"), mentorController.updateMentor);
 router.delete("/Mentor/:id", mentorController.deleteMentor);
 

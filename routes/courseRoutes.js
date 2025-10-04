@@ -22,12 +22,12 @@ router.post('/mentor/enrollment/add', enrollmentController.addMentorToEnrollment
 
 // 🗑️ Remove mentor from enrollment
 router.post('/mentor/enrollment/remove', enrollmentController.removeMentorFromEnrollment);// 📋 Get all enrollments for a specific mentor
-router.get('/mentor/:mentorId/enrollments', enrollmentController.getEnrollmentsByMentorId);
+router.get('/mentorenrollments/:mentorId', enrollmentController.getEnrollmentsByMentorId);
 router.get('/enrollment/:enrollmentId/mentors', enrollmentController.getEnrollmentMentors);
 
 // 👥 Get all mentors with their batch information
 router.get('/mentors/with-batches', enrollmentController.getAllMentorsWithBatches);
-router.get('/mentor/:mentorId/details', enrollmentController.getMentorWithDetailedBatches);
+router.get('/mentorbatches/:mentorId', enrollmentController.getMentorWithDetailedBatches);
 
 
 

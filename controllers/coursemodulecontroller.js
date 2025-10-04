@@ -96,8 +96,16 @@ exports.createCourseModule = async (req, res) => {
 exports.getAllCourseModules = async (req, res) => {
   try {
     const courseModules = await CourseModule.find()
-      .populate("enrolledId");
-    
+      .populate("enrolledId") // enrolled users
+      .populate({
+        path: "courseId",   // course populate
+        select: "name description duration category" // jo fields dikhani hain
+      })
+      .populate({
+        path: "mentorId",   // mentor populate
+        select: "firstName lastName email phoneNumber expertise" // mentor ki fields
+      });
+
     res.status(200).json({
       success: true,
       message: "All course modules retrieved successfully",

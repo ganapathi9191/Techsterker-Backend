@@ -195,7 +195,7 @@ router.post(
   courseController.createCourse
 );
 router.get("/allcourses", courseController.getAllCourses);
-router.get('/courseControllers', courseController.getAllCourses);
+router.get('/coursecontroller', courseController.getAllCourses);
 router.get('/courseController/:id', courseController.getCourseById);
 router.get('/courseController/category/:category', courseController.getCourseByCategory);
 router.put("/courseController/:id", upload.any(), courseController.updateCourseById);

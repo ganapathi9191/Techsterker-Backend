@@ -97,7 +97,7 @@ exports.getAll = async (req, res) => {
         path: 'assignedCourses', // populate assignedCourses
         populate: {
           path: 'enrolledUsers', // populate enrolledUsers inside each course
-          model: 'userRegister', // reference to user model
+          model: 'UserRegister', // reference to user model
           select: 'firstName lastName email phoneNumber' // only required fields
         }
       });
@@ -117,7 +117,7 @@ exports.getById = async (req, res) => {
         path: 'assignedCourses',
         populate: {
           path: 'enrolledUsers',
-          model: 'userRegister',
+          model: 'UserRegister',
           select: 'firstName lastName email phoneNumber'
         }
       });
@@ -145,7 +145,7 @@ exports.update = async (req, res) => {
       path: 'assignedCourses',
       populate: {
         path: 'enrolledUsers',
-        model: 'userRegister',
+        model: 'UserRegister',
         select: 'firstName lastName email phoneNumber'
       }
     });
@@ -166,7 +166,7 @@ exports.delete= async (req, res) => {
         path: 'assignedCourses',
         populate: {
           path: 'enrolledUsers',
-          model: 'userRegister',
+          model: 'UserRegister',
           select: 'firstName lastName email phoneNumber'
         }
       });
@@ -213,7 +213,7 @@ exports.getAllMentors = async (req, res) => {
 // GET BY ID
 exports.getMentorById = async (req, res) => {
   try {
-    const mentor = await OurMentor.findById(req.params.id);
+    const mentor = await Mentor.findById(req.params.id);
     if (!mentor) return res.status(404).json({ message: "Mentor not found" });
     res.status(200).json({ data: mentor });
   } catch (err) {

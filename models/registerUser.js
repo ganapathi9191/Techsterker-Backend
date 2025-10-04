@@ -28,6 +28,8 @@ const userRegisterSchema = new mongoose.Schema({
   advancePayment: { type: Number, default: 0 },
   totalPrice: { type: Number, },  // Total price of course with GST
   remainingPayment: { type: Number, default: 0 },
+  otp: { type: String, default: null }, // OTP field
+  verifyStatus: { type: Boolean, default: false }, // Verification status
 }, { timestamps: true });
 
 module.exports = mongoose.model('UserRegister', userRegisterSchema);

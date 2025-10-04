@@ -16,6 +16,8 @@ const invoiceSchema = new mongoose.Schema({
   total: { type: Number, },
   status: { type: String, enum: ["draft", "sent", "paid", "overdue"], default: "draft" },
   notes: { type: String },
+    paymentStatus: { type: String, },
+
   
   // New fields for PDF storage
   pdfUrl: { type: String,}, // Relative path: "/uploads/invoices/filename.pdf"

@@ -2,18 +2,19 @@ const mongoose = require('mongoose');
 
 // Enrollment Schema
 const enrollmentSchema = new mongoose.Schema({
-  batchNumber: { type: String, required: true },
-  batchName: { type: String, required: true },
-  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
-  startDate: { type: Date, required: true },
-  duration: { type: String, required: true },
-  category: { type: String, required: true },
+  batchNumber: { type: String, },
+  batchName: { type: String, },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", },
+  startDate: { type: Date, },
+  timings: { type: String,  },
+  duration: { type: String, },
+  category: { type: String, },
   assignedMentors: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Mentor"
   }],
   enrolledUsers: [
-    { type: mongoose.Schema.Types.ObjectId, ref: "userRegister" }
+    { type: mongoose.Schema.Types.ObjectId, ref: "UserRegister" }
   ],
    status: { 
     type: String, 
@@ -25,7 +26,7 @@ const enrollmentSchema = new mongoose.Schema({
 // Certificate Schema
 const certificateSchema = new mongoose.Schema({
   enrolledId: { type: mongoose.Schema.Types.ObjectId, ref: 'Enrollment', required: true },
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'userRegister', required: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'UserRegister', required: true },
   certificateFile: { type: String, required: true }, // Cloudinary URL
   status: { 
     type: String, 

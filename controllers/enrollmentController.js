@@ -1,7 +1,7 @@
 const { Enrollment, Certificate,OurCertificate,Community } = require('../models/enrollment');
 const { uploadImage, uploadToCloudinary } = require('../config/cloudinary1');
 const mongoose = require('mongoose');
-const userRegister = require("../models/registerUser"); 
+const UserRegister = require("../models/registerUser"); 
 const {Course} = require("../models/coursesModel");
 const { OurMentor, MentorExperience ,Mentor} = require("../models/ourMentors");
 const { format } = require('date-fns');  // Import the 'format' function from date-fns
@@ -382,7 +382,7 @@ exports.addEnrollmentToUser = async (req, res) => {
     const { enrollmentId, userId } = req.body;
 
     // 1️⃣ Validate user
-    const user = await userRegister.findById(userId);
+    const user = await UserRegister.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -447,7 +447,7 @@ exports.getEnrollmentsByUserId = async (req, res) => {
     const { userId } = req.params;
 
     // Validate user
-    const user = await userRegister.findById(userId).populate({
+    const user = await UserRegister.findById(userId).populate({
       path: 'enrolledCourses',
       select: 'batchNumber batchName startDate timings duration type categorie courseId',
       populate: {
@@ -616,7 +616,7 @@ exports.getEnrollmentsByMentorId = async (req, res) => {
         select: 'batchNumber batchName startDate timings duration category courseId enrolledUsers',
         populate: [
           { path: 'courseId', select: 'title description price duration level' },
-          { path: 'enrolledUsers', model: 'userRegister', select: 'firstName lastName email phoneNumber' }
+          { path: 'enrolledUsers', model: 'UserRegister', select: 'name email mobile' }
         ]
       })
       .populate({
@@ -624,7 +624,7 @@ exports.getEnrollmentsByMentorId = async (req, res) => {
         select: 'batchNumber batchName startDate timings duration category courseId enrolledUsers',
         populate: [
           { path: 'courseId', select: 'title description price duration level' },
-          { path: 'enrolledUsers', model: 'userRegister', select: 'firstName lastName email phoneNumber' }
+          { path: 'enrolledUsers', model: 'UserRegister', select: 'firstName lastName email phoneNumber' }
         ]
       });
 
@@ -700,7 +700,7 @@ exports.getAllMentorsWithBatches = async (req, res) => {
         select: 'batchNumber batchName',
         populate: {
           path: 'enrolledUsers',
-          model: 'userRegister',
+          model: 'UserRegister',
           select: 'firstName lastName',
           options: { limit: 5 }
         }
@@ -732,7 +732,7 @@ exports.getMentorWithDetailedBatches = async (req, res) => {
         select: 'batchNumber batchName startDate timings duration category courseId enrolledUsers',
         populate: [
           { path: 'courseId', select: 'title description price duration level' },
-          { path: 'enrolledUsers', model: 'userRegister', select: 'firstName lastName email phoneNumber' }
+          { path: 'enrolledUsers', model: 'UserRegister', select: 'firstName lastName email phoneNumber' }
         ]
       });
 
