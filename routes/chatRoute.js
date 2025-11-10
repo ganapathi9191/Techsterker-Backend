@@ -38,6 +38,8 @@ router.get("/individual-chats/:userId", chatController.getAllIndividualChats);
 // 💬 Get All Messages in an Individual Chat
 router.get("/individual-messages/:userId/:mentorId", chatController.getIndividualMessages);
 
+// ✏️ Edit Message (Works for both group & individual chats)
+router.put("/messages/edit", chatController.editMessage);
 
 /* ========================================================================== */
 /*                          COMMON MESSAGE ROUTES                             */

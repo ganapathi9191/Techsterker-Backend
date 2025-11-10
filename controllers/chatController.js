@@ -700,6 +700,85 @@ exports.getIndividualMessages = async (req, res) => {
   }
 };
 
+
+/* -------------------------------------------------------------------------- */
+/* ✏️ EDIT MESSAGE (Works for both Group and Individual chats)               */
+/* -------------------------------------------------------------------------- */
+exports.editMessage = async (req, res) => {
+  try {
+    const io = req.app.get("io");
+    const { messageId, userId, newText } = req.body;
+
+    const cleanMessageId = cleanObjectId(messageId);
+    const cleanUserId = cleanObjectId(userId);
+
+    if (!cleanMessageId || !cleanUserId)
+      return res.status(400).json({ success: false, message: "Invalid messageId or userId" });
+
+    if (!newText || newText.trim() === "")
+      return res.status(400).json({ success: false, message: "New message text is required" });
+
+    const message = await Message.findById(cleanMessageId);
+    if (!message)
+      return res.status(404).json({ success: false, message: "Message not found" });
+
+    // ✅ Only sender can edit their message
+    if (message.sender.toString() !== cleanUserId)
+      return res.status(403).json({ success: false, message: "You can only edit your own messages" });
+
+    // ✅ Update message text and mark as edited
+    message.text = newText.trim();
+    message.isEdited = true;
+    message.editedAt = new Date();
+    await message.save();
+
+    const populatedMessage = await Message.findById(cleanMessageId)
+      .populate("sender", "name email profileImage role");
+
+    const chatGroupId = message.chatGroupId;
+
+    // ✅ Update last message if this was the last message
+    const chatGroup = await ChatGroup.findById(chatGroupId);
+    if (chatGroup && chatGroup.lastMessage) {
+      const lastMsg = await Message.findOne({ chatGroupId })
+        .sort({ createdAt: -1 });
+
+      if (lastMsg && lastMsg._id.toString() === cleanMessageId) {
+        await ChatGroup.findByIdAndUpdate(chatGroupId, {
+          lastMessage: {
+            text: newText.trim(),
+            sender: cleanUserId,
+            timestamp: message.createdAt,
+          },
+        });
+      }
+    }
+
+    // ✅ Emit socket event
+    if (io) {
+      const eventName = chatGroup?.groupType === "individual" 
+        ? "messageEdited" 
+        : "messageEdited";
+      
+      io.to(chatGroupId.toString()).emit(eventName, { 
+        messageId: cleanMessageId,
+        chatGroupId,
+        message: populatedMessage
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Message edited successfully",
+      data: populatedMessage,
+    });
+  } catch (error) {
+    console.error("❌ Error editing message:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
+
 /* ========================================================================== */
 /*                         COMMON MESSAGE ACTIONS                             */
 /* ========================================================================== */
