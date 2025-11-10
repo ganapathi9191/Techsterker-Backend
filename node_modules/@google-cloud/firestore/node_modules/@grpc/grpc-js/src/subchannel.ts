@@ -41,12 +41,15 @@ import {
 } from './channelz';
 import {
   ConnectivityStateListener,
+  DataWatcher,
   SubchannelInterface,
 } from './subchannel-interface';
 import { SubchannelCallInterceptingListener } from './subchannel-call';
 import { SubchannelCall } from './subchannel-call';
 import { CallEventTracker, SubchannelConnector, Transport } from './transport';
 import { CallCredentials } from './call-credentials';
+import { SingleSubchannelChannel } from './single-subchannel-channel';
+import { Channel } from './channel';
 
 const TRACER_NAME = 'subchannel';
 
@@ -54,6 +57,11 @@ const TRACER_NAME = 'subchannel';
  * have a constant for the max signed 32 bit integer, so this is a simple way
  * to calculate it */
 const KEEPALIVE_MAX_TIME_MS = ~(1 << 31);
+
+export interface DataProducer {
+  addDataWatcher(dataWatcher: DataWatcher): void;
+  removeDataWatcher(dataWatcher: DataWatcher): void;
+}
 
 export class Subchannel implements SubchannelInterface {
   /**
@@ -104,6 +112,10 @@ export class Subchannel implements SubchannelInterface {
   private streamTracker: ChannelzCallTracker | ChannelzCallTrackerStub;
 
   private secureConnector: SecureConnector;
+
+  private dataProducers: Map<string, DataProducer> = new Map();
+
+  private subchannelChannel: Channel | null = null;
 
   /**
    * A class representing a connection to a single backend.
@@ -518,5 +530,30 @@ export class Subchannel implements SubchannelInterface {
   }
   getCallCredentials(): CallCredentials {
     return this.secureConnector.getCallCredentials();
+  }
+
+  getChannel(): Channel {
+    if (!this.subchannelChannel) {
+      this.subchannelChannel = new SingleSubchannelChannel(this, this.channelTarget, this.options);
+    }
+    return this.subchannelChannel;
+  }
+
+  addDataWatcher(dataWatcher: DataWatcher): void {
+    throw new Error('Not implemented');
+  }
+
+  getOrCreateDataProducer(name: string, createDataProducer: (subchannel: Subchannel) => DataProducer): DataProducer {
+    const existingProducer = this.dataProducers.get(name);
+    if (existingProducer){
+      return existingProducer;
+    }
+    const newProducer = createDataProducer(this);
+    this.dataProducers.set(name, newProducer);
+    return newProducer;
+  }
+
+  removeDataProducer(name: string) {
+    this.dataProducers.delete(name);
   }
 }

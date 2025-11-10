@@ -409,8 +409,9 @@ exports.deleteCourseById = async (req, res) => {
 };
 
 // POST /api/send-otp
+// POST /api/send-otp
 exports.sendOtp = async (req, res) => {
-    try {
+  try {
     const { name, phoneNumber, syllabus } = req.body;
     if (!name || !phoneNumber) {
       return res
@@ -422,7 +423,7 @@ exports.sendOtp = async (req, res) => {
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds
 
-    // Save OTP in DB
+    // Save OTP in DB (No deletion logic)
     await DownloadUser.findOneAndUpdate(
       { phoneNumber },
       { name, syllabus, otp, expiresAt, verified: false },
@@ -448,8 +449,9 @@ exports.sendOtp = async (req, res) => {
 };
 
 // POST /api/verify-otp
+// POST /api/verify-otp
 exports.verifyOtp = async (req, res) => {
-   try {
+  try {
     const { phoneNumber, otp } = req.body;
     if (!phoneNumber || !otp) {
       return res
@@ -468,10 +470,12 @@ exports.verifyOtp = async (req, res) => {
         .status(400)
         .json({ success: false, message: "OTP already used" });
 
-    if (record.expiresAt < new Date())
+    // Check if OTP has expired but do not remove from DB
+    if (record.expiresAt < new Date()) {
       return res
         .status(400)
         .json({ success: false, message: "OTP expired" });
+    }
 
     if (otp !== record.otp)
       return res
@@ -507,16 +511,35 @@ exports.verifyOtp = async (req, res) => {
       .json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+// GET /api/users
 // GET /api/users
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await DownloadUser.find().select("-otp -expiresAt"); // hide sensitive fields
-    return res.status(200).json({ success: true, data: users });
+    // Get sorting field and order from query parameters
+    const sortField = req.query.sortField || 'createdAt';  // Default to 'createdAt'
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;  // Default to descending (-1)
+
+    // Fetch the users with the sorting applied
+    const users = await DownloadUser.find()
+      .select("-otp -expiresAt") // hide sensitive fields
+      .sort({ [sortField]: sortOrder });
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
   } catch (error) {
     console.error("Error fetching users:", error);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
   }
 };
+
 
 // Add Get In Touch Entry
 exports.addGetInTouch = async (req, res) => {
@@ -593,7 +616,13 @@ exports.addGetInTouch = async (req, res) => {
 // Get all Get In Touch Entries
 exports.getAllGetInTouch = async (req, res) => {
   try {
-    const entries = await GetInTouch.find().sort({ createdAt: -1 });
+    // Get sorting field and order from query parameters
+    const sortField = req.query.sortField || 'createdAt';  // Default to 'createdAt'
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;  // Default to descending (-1)
+
+    // Fetch the entries sorted based on the provided field and order
+    const entries = await GetInTouch.find().sort({ [sortField]: sortOrder });
+
     res.status(200).json({
       success: true,
       count: entries.length,
@@ -608,6 +637,7 @@ exports.getAllGetInTouch = async (req, res) => {
     });
   }
 };
+
 
 // Get Entry By ID
 exports.getGetInTouchById = async (req, res) => {

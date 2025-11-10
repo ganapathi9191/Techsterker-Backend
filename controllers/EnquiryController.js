@@ -39,7 +39,9 @@ exports.createEnquiry = async (req, res) => {
 // Get All Enquiries
 exports.getEnquiries = async (req, res) => {
   try {
-    const enquiries = await Enquiry.find();
+    // Sorting by the 'createdAt' field in descending order (-1).
+    const enquiries = await Enquiry.find().sort({ createdAt: -1 });
+    
     res.status(200).json({
       success: true,
       count: enquiries.length,
@@ -49,6 +51,7 @@ exports.getEnquiries = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 // Get One Enquiry by ID
 exports.getEnquiryById = async (req, res) => {
@@ -292,12 +295,25 @@ exports.createApply = async (req, res) => {
 // Get All Applications
 exports.getAllApplies = async (req, res) => {
   try {
-    const applies = await Apply.find().sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, count: applies.length, data: applies });
+    // Get sorting field and order from query parameters, default to 'createdAt' and '-1' (descending)
+    const sortField = req.query.sortField || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+    const applies = await Apply.find().sort({ [sortField]: sortOrder });
+    
+    return res.status(200).json({
+      success: true,
+      count: applies.length,
+      data: applies
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 };
+
 
 // Get Application By ID
 exports.getApplyById = async (req, res) => {

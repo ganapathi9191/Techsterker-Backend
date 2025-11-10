@@ -15,6 +15,7 @@
  *
  */
 
+import { AuthContext } from './auth-context';
 import { CallCredentials } from './call-credentials';
 import { Status } from './constants';
 import { Deadline } from './deadline';
@@ -39,6 +40,35 @@ export interface StatusObject {
 export type PartialStatusObject = Pick<StatusObject, 'code' | 'details'> & {
   metadata?: Metadata | null | undefined;
 };
+
+export interface StatusOrOk<T> {
+  ok: true;
+  value: T;
+}
+
+export interface StatusOrError {
+  ok: false;
+  error: StatusObject;
+}
+
+export type StatusOr<T> = StatusOrOk<T> | StatusOrError;
+
+export function statusOrFromValue<T>(value: T): StatusOr<T> {
+  return {
+    ok: true,
+    value: value
+  };
+}
+
+export function statusOrFromError<T>(error: PartialStatusObject): StatusOr<T> {
+  return {
+    ok: false,
+    error: {
+      ...error,
+      metadata: error.metadata ?? new Metadata()
+    }
+  };
+}
 
 export const enum WriteFlags {
   BufferHint = 1,
@@ -170,6 +200,7 @@ export interface Call {
   halfClose(): void;
   getCallNumber(): number;
   setCredentials(credentials: CallCredentials): void;
+  getAuthContext(): AuthContext | null;
 }
 
 export interface DeadlineInfoProvider {

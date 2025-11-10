@@ -72,6 +72,10 @@ router.get('/allattendance', users.getAllAttendanceForAdmin);
 router.get('/dashboard/:mentorId', users.getMentorDashboard);
 router.post('/generate-otp', users.sendOtp); // Send OTP route
 router.post('/validate-otp', users.verifyOtp); // Verify OTP route
+router.get("/student-attendance/:enrollmentId", users.getStudentAttendanceDashboard);
+// router.post("/acceptchatgrpreq", users.acceptGroupInvitation);
+// router.get('/getchat/:chatGroupId/:userId', users.getChatMessages);
+// router.get('/getnotifications/:userId', users.getNotificationsByUserId);
 
 
 

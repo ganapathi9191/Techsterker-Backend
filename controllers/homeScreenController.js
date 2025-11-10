@@ -727,16 +727,24 @@ exports.createDemo = async (req, res) => {
 // GET ALL DEMOS
 // --------------------
 exports.getAllDemos = async (req, res) => {
-    try {
-        const demos = await Demo.find();
-        return res.status(200).json({
-            success: true,
-            message: "All demos fetched successfully",
-            data: demos
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: err.message });
-    }
+  try {
+    // Get sorting field and order from query parameters, default to 'createdAt' and '-1' (descending)
+    const sortField = req.query.sortField || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+    const demos = await Demo.find().sort({ [sortField]: sortOrder });
+
+    return res.status(200).json({
+      success: true,
+      message: "All demos fetched successfully",
+      data: demos
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
 };
 
 // --------------------

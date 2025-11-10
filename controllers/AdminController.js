@@ -13,7 +13,19 @@ const twilio = require("twilio");
 const nodemailer = require("nodemailer");
 const htmlPdf = require('html-pdf');
 const puppeteer = require('puppeteer-core');
+const ChatGroup = require('../models/ChatGroup');
+const Notification = require('../models/Notification');
+const Message = require('../models/Message');
 const executablePath = '/snap/bin/chromium';  // Path to Chromium found on your server
+
+const cloudinary = require("cloudinary").v2;
+const dotenv = require("dotenv");
+const streamifier = require("streamifier");
+
+dotenv.config();
+
+
+
 // Admin Registration
 exports.registerAdmin = async (req, res) => {
   try {
@@ -229,3 +241,128 @@ exports.registerByAdmin = async (req, res) => {
   }
 };
 
+
+
+// Controller to create a new chat group
+exports.createChatGroup = async (req, res) => {
+  try {
+    const { groupName, enrollmentId, enrolledUserIds } = req.body;
+
+    // Step 1: Create the new chat group
+    const chatGroup = new ChatGroup({
+      groupName,
+      enrollmentId,
+      enrolledUsers: enrolledUserIds,
+    });
+
+    await chatGroup.save();
+
+    // Step 2: Send notifications to enrolled users
+    for (const userId of enrolledUserIds) {
+      const user = await UserRegister.findById(userId);
+      const notificationMessage = `You have been invited to join the group "${groupName}". Please accept to participate.`;
+
+      const notification = new Notification({
+        userId,
+        message: notificationMessage,
+        relatedGroupId: chatGroup._id, // Link notification to this group
+      });
+
+      await notification.save();
+
+      // Optionally, we can send this notification via WebSocket (real-time push)
+      // If you're using Socket.IO for real-time notifications
+      // io.to(user.socketId).emit('newNotification', notification);
+    }
+
+    res.status(201).json({ ok: true, chatGroup });
+  } catch (err) {
+    console.error('Error creating chat group:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+};
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+exports.sendMessage = async (req, res) => {
+  try {
+    const { chatGroupId, text, senderId } = req.body;
+    const file = req.files?.media;
+
+    console.log("req.body:", req.body);
+    console.log("req.files:", req.files);
+
+    if (!chatGroupId || !senderId) {
+      return res.status(400).json({ ok: false, message: "Missing required fields" });
+    }
+
+    // 1️⃣ Check group
+    const chatGroup = await ChatGroup.findById(chatGroupId);
+    if (!chatGroup) return res.status(404).json({ ok: false, message: "Chat group not found" });
+    if (chatGroup.status !== "Accepted") {
+      return res.status(400).json({
+        ok: false,
+        message: "You cannot send a message until you accept the invitation."
+      });
+    }
+
+    // 2️⃣ Handle media upload
+    let mediaUrl = null;
+    if (file) {
+      // Using tempFilePath safe method
+      const uploadResult = await cloudinary.uploader.upload(file.tempFilePath, {
+        folder: "chat-media",
+        resource_type: "auto"
+      });
+      mediaUrl = uploadResult.secure_url;
+    }
+
+    // 3️⃣ Save message
+    const message = new Message({
+      chatGroupId,
+      sender: senderId,
+      text: text || "",
+      media: mediaUrl
+    });
+    await message.save();
+
+    res.status(201).json({
+      ok: true,
+      message,
+      msg: mediaUrl
+        ? "Message with media sent successfully."
+        : "Text message sent successfully."
+    });
+
+  } catch (err) {
+    console.error("Error sending message:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+};
+
+
+
+exports.getAllChatGroups = async (req, res) => {
+  try {
+    const { userId } = req.query; // userId optional query parameter
+
+    let query = {};
+    if (userId) {
+      query = { enrolledUsers: userId }; // Only groups where this user is enrolled
+    }
+
+    const chatGroups = await ChatGroup.find(query)
+      .populate('enrolledUsers', 'name email') // Optional: populate user info
+      .populate('enrollmentId', 'batchName courseId') // Optional: populate enrollment info
+      .sort({ createdAt: -1 }); // Most recent groups first
+
+    res.status(200).json({ ok: true, chatGroups });
+  } catch (err) {
+    console.error('Error fetching chat groups:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+};

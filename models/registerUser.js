@@ -24,7 +24,7 @@ const userRegisterSchema = new mongoose.Schema({
   experience: { type: String },
   password: { type: String },
   generatedPassword: { type: String },
-  paymentStatus: { type: String, enum: ['Pending', 'Completed'], default: 'Pending' },
+  paymentStatus: { type: String, enum: ['Pending', 'Completed', 'Paid'], default: 'Pending' },
   advancePayment: { type: Number, default: 0 },
   totalPrice: { type: Number, },  // Total price of course with GST
   remainingPayment: { type: Number, default: 0 },
