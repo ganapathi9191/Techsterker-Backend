@@ -43,7 +43,9 @@ exports.createGroupChat = async (req, res) => {
 
     // ✅ Validate Enrollment
     const enrollment = await Enrollment.findById(cleanEnrollmentId)
-      .populate("courseId assignedMentors enrolledUsers");
+      .populate("courseId")
+      .populate("assignedMentors", "firstName lastName email phoneNumber expertise subjects")
+      .populate("enrolledUsers", "firstName lastName email phoneNumber");
 
     if (!enrollment) {
       return res.status(404).json({ success: false, message: "Enrollment not found" });
@@ -67,20 +69,20 @@ exports.createGroupChat = async (req, res) => {
       enrollmentId: cleanEnrollmentId,
       courseId: enrollment.courseId || null,
       enrolledUsers,
-      mentors,
+      mentors, // ✅ now added properly
       groupType: "group",
       status: "Active"
     });
 
     await chatGroup.save();
 
-    // ✅ Populate group for response
+    // ✅ Populate for response
     const populatedGroup = await ChatGroup.findById(chatGroup._id)
       .populate("adminId", "name email role")
       .populate("enrollmentId", "batchName batchNumber")
       .populate("courseId", "courseName")
-      .populate("enrolledUsers", "firstName lastName email profileImage")
-      .populate("mentors", "firstName lastName email profileImage");
+      .populate("enrolledUsers", "firstName lastName email")
+      .populate("mentors", "firstName lastName email phoneNumber expertise subjects");
 
     return res.status(201).json({
       success: true,

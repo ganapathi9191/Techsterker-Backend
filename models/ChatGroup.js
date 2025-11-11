@@ -8,65 +8,74 @@ const chatGroupSchema = new mongoose.Schema({
   groupName: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
   },
 
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
-    required: true
+    required: true,
   },
 
   enrollmentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Enrollment',
-    default: null
+    default: null,
   },
 
   courseId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course',
-    default: null
+    default: null,
   },
 
-  enrolledUsers: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'UserRegister'
-  }],
+  enrolledUsers: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'UserRegister',
+    },
+  ],
 
-  mentors: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'UserRegister'
-  }],
+  mentors: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: 'mentorModel', // Dynamic reference: can point to Mentor or UserRegister
+    },
+  ],
+
+  mentorModel: {
+    type: String,
+    enum: ['Mentor', 'UserRegister'],
+    default: 'Mentor',
+  },
 
   groupType: {
     type: String,
     enum: ['group', 'individual'],
-    default: 'group'
+    default: 'group',
   },
 
   lastMessage: {
     text: String,
     sender: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'UserRegister'
+      ref: 'UserRegister',
     },
-    timestamp: Date
+    timestamp: Date,
   },
 
   status: {
     type: String,
     enum: ['Active', 'Archived', 'Inactive'],
-    default: 'Active'
-  }
+    default: 'Active',
+  },
 }, { timestamps: true });
 
 // ✅ Indexes
 chatGroupSchema.index({ enrollmentId: 1, groupName: 1 });
 chatGroupSchema.index({ courseId: 1, mentors: 1, groupName: 1 });
 chatGroupSchema.index({ enrolledUsers: 1, status: 1 });
-chatGroupSchema.index({ mentors: 1, status: 1 });
-/**
+chatGroupSchema.index({ mentors: 1, status: 1 });/**
  * Message Schema
  */
 const messageSchema = new mongoose.Schema({
