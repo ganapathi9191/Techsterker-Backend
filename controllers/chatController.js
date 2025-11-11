@@ -864,3 +864,128 @@ exports.getMessageById = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+/* -------------------------------------------------------------------------- */
+/* 📋 GET ALL GROUP CHATS (No userId filter — Admin / Global Access)          */
+/* -------------------------------------------------------------------------- */
+exports.getAllGroupChatsAll = async (req, res) => {
+  try {
+    const chats = await ChatGroup.find({ groupType: "group" })
+      .populate("adminId", "name email role")
+      .populate("enrolledUsers", "firstName lastName email profileImage")
+      .populate("mentors", "firstName lastName email profileImage")
+      .populate("lastMessage.sender", "firstName lastName email profileImage")
+      .populate("courseId", "courseName")
+      .populate("enrollmentId", "batchName batchNumber")
+      .sort({ "lastMessage.timestamp": -1, updatedAt: -1 });
+
+    if (!chats.length) {
+      return res.status(200).json({
+        success: true,
+        message: "No group chats found.",
+        totalChats: 0,
+        data: [],
+      });
+    }
+
+    const chatsWithDetails = await Promise.all(
+      chats.map(async (chat) => {
+        const totalMessages = await Message.countDocuments({ chatGroupId: chat._id });
+        return {
+          _id: chat._id,
+          groupName: chat.groupName,
+          admin: chat.adminId,
+          groupType: chat.groupType,
+          totalMessages,
+          lastMessage: chat.lastMessage || null,
+          course: chat.courseId || null,
+          enrollment: chat.enrollmentId || null,
+          membersCount:
+            (chat.enrolledUsers?.length || 0) +
+            (chat.mentors?.length || 0) +
+            (chat.adminId ? 1 : 0),
+          createdAt: chat.createdAt,
+          updatedAt: chat.updatedAt,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "All group chats fetched successfully",
+      totalChats: chatsWithDetails.length,
+      data: chatsWithDetails,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching all group chats:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching group chats",
+      error: error.message,
+    });
+  }
+};
+
+
+/* -------------------------------------------------------------------------- */
+/* 📋 GET ALL INDIVIDUAL CHATS (No userId filter — Admin / Global Access)     */
+/* -------------------------------------------------------------------------- */
+exports.getAllIndividualChatsAll = async (req, res) => {
+  try {
+    const chats = await ChatGroup.find({
+      $or: [
+        { groupType: "individual" },
+        { 
+          groupType: { $exists: false },
+          enrolledUsers: { $size: 1 },
+          mentors: { $size: 1 }
+        }
+      ]
+    })
+      .populate("enrolledUsers", "name email profileImage role")
+      .populate("mentors", "name email profileImage role")
+      .populate("lastMessage.sender", "name email profileImage")
+      .sort({ "lastMessage.timestamp": -1, updatedAt: -1 });
+
+    if (!chats.length) {
+      return res.status(200).json({
+        success: true,
+        message: "No individual chats found.",
+        totalChats: 0,
+        data: [],
+      });
+    }
+
+    const chatsWithDetails = await Promise.all(
+      chats.map(async (chat) => {
+        const totalMessages = await Message.countDocuments({ chatGroupId: chat._id });
+
+        return {
+          _id: chat._id,
+          groupName: chat.groupName,
+          groupType: chat.groupType || "individual",
+          users: chat.enrolledUsers,
+          mentors: chat.mentors,
+          totalMessages,
+          lastMessage: chat.lastMessage || null,
+          createdAt: chat.createdAt,
+          updatedAt: chat.updatedAt,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "All individual chats fetched successfully",
+      totalChats: chatsWithDetails.length,
+      data: chatsWithDetails,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching all individual chats:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching individual chats",
+      error: error.message,
+    });
+  }
+};

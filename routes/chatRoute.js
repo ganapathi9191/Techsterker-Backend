@@ -51,4 +51,8 @@ router.delete("/messages/:messageId/:userId", chatController.deleteMessage);
 // 📝 Get Message by ID
 router.get("/messages/:messageId", chatController.getMessageById);
 
+
+
+router.get("/group-all", chatController.getAllGroupChatsAll);
+router.get("/individual-all", chatController.getAllIndividualChatsAll);
 module.exports = router;
