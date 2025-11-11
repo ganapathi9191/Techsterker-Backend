@@ -11,6 +11,12 @@ const chatGroupSchema = new mongoose.Schema({
     trim: true
   },
 
+  adminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    required: true
+  },
+
   enrollmentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Enrollment',
@@ -33,6 +39,12 @@ const chatGroupSchema = new mongoose.Schema({
     ref: 'UserRegister'
   }],
 
+  groupType: {
+    type: String,
+    enum: ['group', 'individual'],
+    default: 'group'
+  },
+
   lastMessage: {
     text: String,
     sender: {
@@ -54,7 +66,6 @@ chatGroupSchema.index({ enrollmentId: 1, groupName: 1 });
 chatGroupSchema.index({ courseId: 1, mentors: 1, groupName: 1 });
 chatGroupSchema.index({ enrolledUsers: 1, status: 1 });
 chatGroupSchema.index({ mentors: 1, status: 1 });
-
 /**
  * Message Schema
  */

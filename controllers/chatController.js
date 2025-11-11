@@ -1,6 +1,7 @@
 const { ChatGroup, Message, UserChatPreference, Notification } = require("../models/ChatGroup");
 const { Enrollment } = require("../models/enrollment");
 const UserRegister = require("../models/registerUser");
+const Admin = require("../models/Admin");
 const { uploadImage } = require("../config/cloudinary1");
 const mongoose = require("mongoose");
 
@@ -22,62 +23,78 @@ const cleanObjectId = (id) => {
 /* -------------------------------------------------------------------------- */
 exports.createGroupChat = async (req, res) => {
   try {
-    const { groupName, enrollmentId, courseId, mentorId } = req.body;
+    const { groupName, adminId, enrollmentId } = req.body;
 
-    if (!groupName)
-      return res.status(400).json({ success: false, message: "groupName is required" });
-
-    let enrolledUsers = [];
-    let mentors = [];
-
-    // Enrollment-based group
-    if (enrollmentId) {
-      const enrollment = await Enrollment.findById(enrollmentId).populate("courseId");
-      if (!enrollment)
-        return res.status(404).json({ success: false, message: "Enrollment not found" });
-
-      enrolledUsers = enrollment.enrolledUsers || [];
-      mentors = enrollment.mentors || [];
+    if (!groupName || !adminId || !enrollmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "groupName, adminId, and enrollmentId are required."
+      });
     }
 
-    // Course-based group
-    if (courseId && mentorId) {
-      const Course = require("../models/course");
-      const course = await Course.findById(courseId);
-      const mentor = await UserRegister.findById(mentorId);
-      if (!course || !mentor)
-        return res.status(404).json({ success: false, message: "Course or Mentor not found" });
+    const cleanAdminId = cleanObjectId(adminId);
+    const cleanEnrollmentId = cleanObjectId(enrollmentId);
 
-      const enrollments = await Enrollment.find({ courseId, mentors: mentorId });
-      enrolledUsers = [...new Set(enrollments.flatMap(e => e.enrolledUsers || []))];
-      mentors = [mentorId];
+    // ✅ Validate Admin
+    const admin = await Admin.findById(cleanAdminId);
+    if (!admin) {
+      return res.status(404).json({ success: false, message: "Admin not found" });
     }
 
+    // ✅ Validate Enrollment
+    const enrollment = await Enrollment.findById(cleanEnrollmentId)
+      .populate("courseId assignedMentors enrolledUsers");
+
+    if (!enrollment) {
+      return res.status(404).json({ success: false, message: "Enrollment not found" });
+    }
+
+    // ✅ Extract users and mentors
+    const enrolledUsers = (enrollment.enrolledUsers || []).map(u => u._id);
+    const mentors = (enrollment.assignedMentors || []).map(m => m._id);
+
+    if (enrolledUsers.length === 0 && mentors.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No enrolled users or mentors found in this enrollment."
+      });
+    }
+
+    // ✅ Create new group
     const chatGroup = new ChatGroup({
       groupName,
-      enrollmentId: enrollmentId || null,
-      courseId: courseId || null,
+      adminId: cleanAdminId,
+      enrollmentId: cleanEnrollmentId,
+      courseId: enrollment.courseId || null,
       enrolledUsers,
       mentors,
       groupType: "group",
-      status: "Active",
+      status: "Active"
     });
 
     await chatGroup.save();
 
+    // ✅ Populate group for response
     const populatedGroup = await ChatGroup.findById(chatGroup._id)
-      .populate("enrollmentId courseId")
-      .populate("enrolledUsers", "name email profileImage")
-      .populate("mentors", "name email profileImage");
+      .populate("adminId", "name email role")
+      .populate("enrollmentId", "batchName batchNumber")
+      .populate("courseId", "courseName")
+      .populate("enrolledUsers", "firstName lastName email profileImage")
+      .populate("mentors", "firstName lastName email profileImage");
 
     return res.status(201).json({
       success: true,
-      message: "Group chat created successfully",
-      data: populatedGroup,
+      message: "Group chat created successfully by admin",
+      data: populatedGroup
     });
+
   } catch (error) {
-    console.error("❌ Error creating group chat:", error);
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+    console.error("❌ Error creating admin group chat:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while creating group chat",
+      error: error.message
+    });
   }
 };
 
@@ -95,25 +112,24 @@ exports.sendGroupMessage = async (req, res) => {
     if (!cleanChatGroupId || !cleanSenderId)
       return res.status(400).json({ success: false, message: "Invalid chatGroupId or senderId" });
 
-    const chatGroup = await ChatGroup.findById(cleanChatGroupId);
-    if (!chatGroup) 
+    const chatGroup = await ChatGroup.findById(cleanChatGroupId)
+      .populate("adminId", "name email role")
+      .populate("enrolledUsers", "firstName lastName email")
+      .populate("mentors", "firstName lastName email");
+
+    if (!chatGroup)
       return res.status(404).json({ success: false, message: "Chat group not found" });
 
-    if (chatGroup.groupType === "individual")
-      return res.status(400).json({ success: false, message: "Use sendIndividualMessage for one-on-one chats" });
-
-    const sender = await UserRegister.findById(cleanSenderId);
-    if (!sender) 
-      return res.status(404).json({ success: false, message: "Sender not found" });
-
-    // ✅ Verify sender is a member
-    const isMember = 
-      chatGroup.enrolledUsers.some(u => u.toString() === cleanSenderId) ||
-      chatGroup.mentors.some(m => m.toString() === cleanSenderId);
+    // ✅ Verify sender is part of group or is admin
+    const isMember =
+      chatGroup.enrolledUsers.some(u => u._id.toString() === cleanSenderId) ||
+      chatGroup.mentors.some(m => m._id.toString() === cleanSenderId) ||
+      (chatGroup.adminId && chatGroup.adminId._id.toString() === cleanSenderId);
 
     if (!isMember)
-      return res.status(403).json({ success: false, message: "You are not a member of this group" });
+      return res.status(403).json({ success: false, message: "You are not a member or admin of this group" });
 
+    // ✅ Upload files if attached
     let uploadedMedia = [];
     if (req.files?.length) {
       for (const file of req.files) {
@@ -133,6 +149,7 @@ exports.sendGroupMessage = async (req, res) => {
     if (!text && uploadedMedia.length === 0)
       return res.status(400).json({ success: false, message: "Message must contain text or files" });
 
+    // ✅ Save message
     const message = new Message({
       chatGroupId: cleanChatGroupId,
       sender: cleanSenderId,
@@ -142,8 +159,9 @@ exports.sendGroupMessage = async (req, res) => {
     await message.save();
 
     const populatedMessage = await Message.findById(message._id)
-      .populate("sender", "name email profileImage");
+      .populate("sender", "firstName lastName email profileImage role");
 
+    // ✅ Update last message in group
     await ChatGroup.findByIdAndUpdate(cleanChatGroupId, {
       lastMessage: {
         text: text || (uploadedMedia.length > 0 ? `Sent ${uploadedMedia.length} file(s)` : ""),
@@ -152,10 +170,11 @@ exports.sendGroupMessage = async (req, res) => {
       },
     });
 
-    if (io) 
-      io.to(cleanChatGroupId).emit("newGroupMessage", { 
-        chatGroupId: cleanChatGroupId, 
-        message: populatedMessage 
+    // ✅ Emit via Socket.io
+    if (io)
+      io.to(cleanChatGroupId).emit("newGroupMessage", {
+        chatGroupId: cleanChatGroupId,
+        message: populatedMessage,
       });
 
     const totalMessages = await Message.countDocuments({ chatGroupId: cleanChatGroupId });
@@ -186,84 +205,51 @@ exports.getAllGroupChats = async (req, res) => {
     if (!cleanUserId)
       return res.status(400).json({ success: false, message: "Invalid userId format" });
 
-    console.log("🔍 Searching chats for user:", cleanUserId);
-    console.log("🔍 User ID type:", typeof cleanUserId);
-
-    // First, get ALL individual chats to see what's in DB
-    const allChats = await ChatGroup.find({ groupType: "individual" });
-    console.log("📊 Total individual chats in DB:", allChats.length);
-
-    // Log first chat structure if exists
-    if (allChats.length > 0) {
-      console.log("📝 Sample chat structure:");
-      console.log("Enrolled Users:", allChats[0].enrolledUsers);
-      console.log("Mentors:", allChats[0].mentors);
-    }
-
-    // ✅ Try multiple query approaches
     const userObjectId = new mongoose.Types.ObjectId(cleanUserId);
 
-    // Approach 1: Using ObjectId
-    let chats = await ChatGroup.find({
-      groupType: "individual",
+    // ✅ Find all group chats where user is enrolled, mentor, or admin
+    const chats = await ChatGroup.find({
+      groupType: "group",
       $or: [
         { enrolledUsers: userObjectId },
-        { mentors: userObjectId }
-      ]
+        { mentors: userObjectId },
+        { adminId: userObjectId }
+      ],
     })
-      .populate("enrolledUsers", "name email profileImage role")
-      .populate("mentors", "name email profileImage role")
-      .populate("lastMessage.sender", "name email profileImage")
+      .populate("adminId", "name email role")
+      .populate("enrolledUsers", "firstName lastName email profileImage")
+      .populate("mentors", "firstName lastName email profileImage")
+      .populate("lastMessage.sender", "firstName lastName email profileImage")
+      .populate("courseId", "courseName")
+      .populate("enrollmentId", "batchName batchNumber")
       .sort({ "lastMessage.timestamp": -1, updatedAt: -1 });
-
-    console.log("✅ Found chats with ObjectId query:", chats.length);
-
-    // Approach 2: If nothing found, try string comparison
-    if (chats.length === 0) {
-      console.log("⚠️ Trying string-based query...");
-      
-      const allIndividualChats = await ChatGroup.find({ groupType: "individual" })
-        .populate("enrolledUsers", "name email profileImage role")
-        .populate("mentors", "name email profileImage role")
-        .populate("lastMessage.sender", "name email profileImage");
-
-      chats = allIndividualChats.filter(chat => {
-        const enrolledMatch = chat.enrolledUsers.some(u => u._id.toString() === cleanUserId);
-        const mentorMatch = chat.mentors.some(m => m._id.toString() === cleanUserId);
-        return enrolledMatch || mentorMatch;
-      });
-
-      console.log("✅ Found chats with filter:", chats.length);
-    }
 
     if (!chats.length) {
       return res.status(200).json({
         success: true,
-        message: "No individual chats found for this user.",
+        message: "No group chats found for this user or admin.",
         totalChats: 0,
         data: [],
-        debug: {
-          searchedUserId: cleanUserId,
-          totalIndividualChatsInDB: allChats.length
-        }
       });
     }
 
+    // ✅ Add extra info (total messages, etc.)
     const chatsWithDetails = await Promise.all(
       chats.map(async (chat) => {
         const totalMessages = await Message.countDocuments({ chatGroupId: chat._id });
-
-        const otherUser =
-          chat.enrolledUsers.find(u => u._id.toString() !== cleanUserId) ||
-          chat.mentors.find(m => m._id.toString() !== cleanUserId);
-
         return {
           _id: chat._id,
           groupName: chat.groupName,
+          admin: chat.adminId,
           groupType: chat.groupType,
-          otherUser: otherUser || null,
           totalMessages,
           lastMessage: chat.lastMessage || null,
+          course: chat.courseId || null,
+          enrollment: chat.enrollmentId || null,
+          membersCount:
+            (chat.enrolledUsers?.length || 0) +
+            (chat.mentors?.length || 0) +
+            (chat.adminId ? 1 : 0),
           createdAt: chat.createdAt,
           updatedAt: chat.updatedAt,
         };
@@ -272,12 +258,12 @@ exports.getAllGroupChats = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Individual chats fetched successfully",
+      message: "Group chats fetched successfully",
       totalChats: chatsWithDetails.length,
       data: chatsWithDetails,
     });
   } catch (error) {
-    console.error("❌ Error fetching individual chats:", error);
+    console.error("❌ Error fetching group chats:", error);
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
@@ -296,25 +282,27 @@ exports.getGroupMessages = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid chatGroupId or userId" });
 
     const chatGroup = await ChatGroup.findById(cleanChatGroupId)
-      .populate("enrolledUsers mentors", "name email profileImage role")
+      .populate("adminId", "name email role")
+      .populate("enrolledUsers", "firstName lastName email profileImage role")
+      .populate("mentors", "firstName lastName email profileImage role")
       .populate("courseId", "courseName")
       .populate("enrollmentId", "batchName batchNumber");
 
     if (!chatGroup)
       return res.status(404).json({ success: false, message: "Chat group not found" });
 
-    if (chatGroup.groupType === "individual")
-      return res.status(400).json({ success: false, message: "Use getIndividualMessages for one-on-one chats" });
-
+    // ✅ Check if user is admin, mentor, or enrolled user
     const isMember =
       chatGroup.enrolledUsers.some(u => u._id.toString() === cleanUserId) ||
-      chatGroup.mentors.some(m => m._id.toString() === cleanUserId);
+      chatGroup.mentors.some(m => m._id.toString() === cleanUserId) ||
+      (chatGroup.adminId && chatGroup.adminId._id.toString() === cleanUserId);
 
     if (!isMember)
-      return res.status(403).json({ success: false, message: "Access denied. Not a member of this group." });
+      return res.status(403).json({ success: false, message: "Access denied. Not a member or admin of this group." });
 
+    // ✅ Fetch messages
     const messages = await Message.find({ chatGroupId: cleanChatGroupId })
-      .populate("sender", "name email profileImage role")
+      .populate("sender", "firstName lastName email profileImage role")
       .sort({ createdAt: 1 });
 
     return res.status(200).json({
