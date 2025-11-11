@@ -28,7 +28,7 @@ exports.createGroupChat = async (req, res) => {
     if (!groupName || !adminId || !enrollmentId) {
       return res.status(400).json({
         success: false,
-        message: "groupName, adminId, and enrollmentId are required."
+        message: "groupName, adminId, and enrollmentId are required.",
       });
     }
 
@@ -44,21 +44,28 @@ exports.createGroupChat = async (req, res) => {
     // ✅ Validate Enrollment
     const enrollment = await Enrollment.findById(cleanEnrollmentId)
       .populate("courseId")
-      .populate("assignedMentors", "firstName lastName email phoneNumber expertise subjects")
-      .populate("enrolledUsers", "firstName lastName email phoneNumber");
+      .populate("assignedMentors", "firstName lastName email phoneNumber expertise subjects profileImage")
+      .populate("enrolledUsers", "firstName lastName email phoneNumber profileImage");
 
     if (!enrollment) {
       return res.status(404).json({ success: false, message: "Enrollment not found" });
     }
 
-    // ✅ Extract users and mentors
-    const enrolledUsers = (enrollment.enrolledUsers || []).map(u => u._id);
-    const mentors = (enrollment.assignedMentors || []).map(m => m._id);
+    // ✅ Extract enrolled users
+    const enrolledUsers = (enrollment.enrolledUsers || []).map((u) => u._id);
+
+    // ✅ Extract mentors safely (handles populated or plain ObjectIds)
+    let mentors = [];
+    if (Array.isArray(enrollment.assignedMentors) && enrollment.assignedMentors.length > 0) {
+      mentors = enrollment.assignedMentors.map((m) => m._id || m);
+    } else {
+      console.warn(`⚠️ No mentors found in enrollment ${cleanEnrollmentId}`);
+    }
 
     if (enrolledUsers.length === 0 && mentors.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No enrolled users or mentors found in this enrollment."
+        message: "No enrolled users or mentors found in this enrollment.",
       });
     }
 
@@ -69,9 +76,9 @@ exports.createGroupChat = async (req, res) => {
       enrollmentId: cleanEnrollmentId,
       courseId: enrollment.courseId || null,
       enrolledUsers,
-      mentors, // ✅ now added properly
+      mentors,
       groupType: "group",
-      status: "Active"
+      status: "Active",
     });
 
     await chatGroup.save();
@@ -81,24 +88,25 @@ exports.createGroupChat = async (req, res) => {
       .populate("adminId", "name email role")
       .populate("enrollmentId", "batchName batchNumber")
       .populate("courseId", "courseName")
-      .populate("enrolledUsers", "firstName lastName email")
-      .populate("mentors", "firstName lastName email phoneNumber expertise subjects");
+      .populate("enrolledUsers", "firstName lastName email phoneNumber profileImage")
+      .populate("mentors", "firstName lastName email phoneNumber profileImage expertise subjects");
 
     return res.status(201).json({
       success: true,
       message: "Group chat created successfully by admin",
-      data: populatedGroup
+      data: populatedGroup,
     });
-
   } catch (error) {
     console.error("❌ Error creating admin group chat:", error);
     return res.status(500).json({
       success: false,
       message: "Server error while creating group chat",
-      error: error.message
+      error: error.message,
     });
   }
 };
+
+
 
 /* -------------------------------------------------------------------------- */
 /* 📨 SEND GROUP MESSAGE                                                      */
@@ -215,12 +223,12 @@ exports.getAllGroupChats = async (req, res) => {
       $or: [
         { enrolledUsers: userObjectId },
         { mentors: userObjectId },
-        { adminId: userObjectId }
+        { adminId: userObjectId },
       ],
     })
       .populate("adminId", "name email role")
-      .populate("enrolledUsers", "firstName lastName email profileImage")
-      .populate("mentors", "firstName lastName email profileImage")
+      .populate("enrolledUsers", "firstName lastName email phoneNumber profileImage")
+      .populate("mentors", "firstName lastName email phoneNumber profileImage expertise subjects")
       .populate("lastMessage.sender", "firstName lastName email profileImage")
       .populate("courseId", "courseName")
       .populate("enrollmentId", "batchName batchNumber")
@@ -229,25 +237,50 @@ exports.getAllGroupChats = async (req, res) => {
     if (!chats.length) {
       return res.status(200).json({
         success: true,
-        message: "No group chats found for this user or admin.",
-        totalChats: 0,
+        message: "No group chats found for this user, mentor, or admin.",
+        totalGroups: 0,
         data: [],
       });
     }
 
-    // ✅ Add extra info (total messages, etc.)
+    // ✅ Add extra info (total messages, mentors, etc.)
     const chatsWithDetails = await Promise.all(
       chats.map(async (chat) => {
         const totalMessages = await Message.countDocuments({ chatGroupId: chat._id });
+
+        // 🧩 Format mentors list
+        const mentorDetails = (chat.mentors || []).map((m) => ({
+          _id: m._id,
+          name: `${m.firstName || ""} ${m.lastName || ""}`.trim(),
+          email: m.email || "",
+          phoneNumber: m.phoneNumber || "",
+          expertise: m.expertise || "",
+          subjects: m.subjects || [],
+          profileImage: m.profileImage || "",
+          role: "Mentor",
+        }));
+
+        // 🧩 Format enrolled users
+        const enrolledUserDetails = (chat.enrolledUsers || []).map((u) => ({
+          _id: u._id,
+          name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+          email: u.email || "",
+          phoneNumber: u.phoneNumber || "",
+          profileImage: u.profileImage || "",
+          role: "Student",
+        }));
+
         return {
           _id: chat._id,
           groupName: chat.groupName,
-          admin: chat.adminId,
+          admin: chat.adminId || null,
+          courseName: chat.courseId?.courseName || null,
+          batchName: chat.enrollmentId?.batchName || null,
           groupType: chat.groupType,
+          enrolledUsers: enrolledUserDetails,
+          mentors: mentorDetails, // ✅ Added here
           totalMessages,
           lastMessage: chat.lastMessage || null,
-          course: chat.courseId || null,
-          enrollment: chat.enrollmentId || null,
           membersCount:
             (chat.enrolledUsers?.length || 0) +
             (chat.mentors?.length || 0) +
@@ -261,12 +294,16 @@ exports.getAllGroupChats = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Group chats fetched successfully",
-      totalChats: chatsWithDetails.length,
+      totalGroups: chatsWithDetails.length,
       data: chatsWithDetails,
     });
   } catch (error) {
     console.error("❌ Error fetching group chats:", error);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching group chats",
+      error: error.message,
+    });
   }
 };
 

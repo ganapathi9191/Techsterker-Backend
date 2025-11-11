@@ -9,8 +9,8 @@ const chatController = require("../controllers/chatController");
 /*                              GROUP CHAT ROUTES                             */
 /* ========================================================================== */
 
-// 🆕 Create Group Chat
-router.post("/group-chats", chatController.createGroupChat);
+// ✅ Create Group Chat
+router.post("/g-chats", chatController.createGroupChat);
 
 // 📨 Send Group Message (supports text + file uploads)
 router.post("/group-messages", upload.array("files"), chatController.sendGroupMessage);
