@@ -764,8 +764,8 @@ exports.getIndividualMessages = async (req, res) => {
         console.log("✅ Chat found:", chatGroup ? "Yes" : "No");
 
         if (!chatGroup) {
-            return res.status(404).json({
-                success: false,
+            return res.status(201).json({
+                success: true,
                 message: "No individual chat found between these users.",
                 totalMessages: 0,
                 data: [],
@@ -967,7 +967,7 @@ exports.getMessageById = async (req, res) => {
             .populate("chatGroupId", "groupName groupType");
 
         if (!message)
-            return res.status(404).json({ success: false, message: "Message not found" });
+            return res.status(201).json({ success: true, message: "Message not found" });
 
         return res.status(200).json({
             success: true,
