@@ -22,6 +22,7 @@ router.get("/group-chats/:userId", chatController.getAllGroupChats);
 router.get("/group-messages/:chatGroupId/:userId", chatController.getGroupMessages);
 
 
+
 /* ========================================================================== */
 /*                          INDIVIDUAL CHAT ROUTES                            */
 /* ========================================================================== */
