@@ -944,7 +944,7 @@ exports.deleteMessage = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Message deleted successfully",
+            message: "🗑️ Message deleted successfully",
         });
     } catch (error) {
         console.error("❌ Error deleting message:", error);
