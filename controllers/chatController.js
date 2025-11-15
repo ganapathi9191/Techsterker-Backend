@@ -635,11 +635,22 @@ exports.createIndividualChat = async (req, res) => {
     }
 };
 
+
+
+
+
+
 /* -------------------------------------------------------------------------- */
 /* 📨 SEND INDIVIDUAL MESSAGE (Auto-create chat if missing)                   */
 /* -------------------------------------------------------------------------- */
+
+
+
+
+
+
 exports.sendIndividualMessage = async (req, res) => {
-    try {
+     try {
         const io = req.app.get("io");
         let { userId, mentorId, senderId, text } = req.body;
 
@@ -795,41 +806,74 @@ exports.sendIndividualMessage = async (req, res) => {
         });
         await message.save();
 
-        // ✅ Manually fetch sender details (could be user, mentor, or admin)
+        // ✅✅✅ CRITICAL: DETERMINE SENDER DETAILS - CHECK IN PRIORITY ORDER ✅✅✅
+        // Priority: Admin > Mentor > User
         let senderDetails = null;
-        let sender = await UserRegister.findById(cleanSenderId).select("firstName lastName name email profileImage role");
 
-        if (!sender) {
-            sender = await Mentor.findById(cleanSenderId).select("firstName lastName name email profileImage role");
+        console.log("🔍 Starting sender detection for ID:", cleanSenderId);
+
+        // 🥇 FIRST: Check Admin collection
+        let adminSender = await Admin.findById(cleanSenderId).lean();
+        if (adminSender) {
+            senderDetails = {
+                _id: adminSender._id,
+                name: formatUserName(adminSender),
+                email: adminSender.email || "",
+                profileImage: adminSender.profileImage || adminSender.image || ""
+            };
+            console.log("✅ Sender found in Admin collection");
         }
 
-        if (!sender) {
-            sender = await Admin.findById(cleanSenderId).select("name email role");
+        // 🥈 SECOND: Check Mentor collection (only if not found as Admin)
+        if (!senderDetails) {
+            let mentorSender = await Mentor.findById(cleanSenderId).lean();
+            if (mentorSender) {
+                senderDetails = {
+                    _id: mentorSender._id,
+                    name: formatUserName(mentorSender),
+                    email: mentorSender.email || "",
+                    profileImage: mentorSender.profileImage || mentorSender.image || ""
+                };
+                console.log("✅ Sender found in Mentor collection");
+            }
         }
 
-        if (sender) {
-            senderDetails = {
-                _id: sender._id,
-                name: formatUserName(sender),
-                email: sender.email || "",
-                profileImage: sender.profileImage || "",
-                role: sender.role || "User",
-            };
-        } else {
-            console.warn("⚠️ Sender not found in any collection:", cleanSenderId);
-            senderDetails = {
-                _id: cleanSenderId,
-                name: "Unknown User",
-                email: "",
-                profileImage: "",
-                role: "User",
-            };
+        // 🥉 THIRD: Check UserRegister collection (only if not found as Admin or Mentor)
+        if (!senderDetails) {
+            let userSender = await UserRegister.findById(cleanSenderId).lean();
+            if (userSender) {
+                senderDetails = {
+                    _id: userSender._id,
+                    name: formatUserName(userSender),
+                    email: userSender.email || "",
+                    profileImage: userSender.profileImage || userSender.image || ""
+                };
+                console.log("✅ Sender found in UserRegister collection");
+            }
+        }
+
+        // ❌ If sender not found in any collection
+        if (!senderDetails) {
+            console.error("❌ Sender not found in any collection:", cleanSenderId);
+            return res.status(404).json({
+                success: false,
+                message: "Sender not found in any collection (Admin, Mentor, UserRegister)",
+                debug: { cleanSenderId }
+            });
+        }
+
+        console.log("✅ Final sender details:", senderDetails);
+
+        // ✅ CRITICAL: Remove any role field if it exists
+        if (senderDetails && senderDetails.role) {
+            delete senderDetails.role;
         }
 
         const formattedMessage = {
             _id: message._id,
             chatGroupId: message.chatGroupId,
             sender: senderDetails,
+            senderId: cleanSenderId, // ✅ Add senderId for frontend comparison
             text: message.text || "",
             media: message.media || [],
             isEdited: false,
@@ -867,6 +911,7 @@ exports.sendIndividualMessage = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 /* -------------------------------------------------------------------------- */
 /* 📋 GET ALL INDIVIDUAL CHATS (One-on-One)                                   */
 /* -------------------------------------------------------------------------- */
