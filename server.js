@@ -91,7 +91,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api', chatRoutes);
 console.log('✅ Chat routes registered successfully');
 
-// ✅ Safe route logger (won’t crash if router not ready)
+// ✅ Safe route logger (won't crash if router not ready)
 setTimeout(() => {
   if (app._router && app._router.stack) {
     console.log('🛣️ Loaded routes:');
@@ -104,6 +104,7 @@ setTimeout(() => {
     console.warn('⚠️ No routes registered yet when logging attempted.');
   }
 }, 3000);
+
 // ==========================
 // ✅ HEALTH CHECK
 // ==========================
@@ -111,6 +112,28 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==========================
+// ✅ ROOT ROUTE
+// ==========================
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'HiCap Backend API',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      courses: '/api/courses',
+      users: '/api/users',
+      mentors: '/api/our-mentor',
+      admin: '/api/admin',
+      chat: '/api/group-chats'
+    },
+    documentation: 'All API endpoints are prefixed with /api',
     timestamp: new Date().toISOString()
   });
 });
@@ -220,5 +243,4 @@ const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Socket.IO server ready`);
-  console.log(`🔗 API: https://techsterker-backend-1.onrender.com/api`);
 });
