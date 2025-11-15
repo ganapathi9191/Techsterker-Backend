@@ -188,8 +188,39 @@ exports.sendGroupMessage = async (req, res) => {
         });
         await message.save();
 
-        const populatedMessage = await Message.findById(message._id)
-            .populate("sender", "firstName lastName name email profileImage role");
+        // ✅ Manually fetch sender details
+        let senderDetails = null;
+        let sender = await UserRegister.findById(cleanSenderId).select("firstName lastName name email profileImage role");
+
+        if (!sender) {
+            sender = await Mentor.findById(cleanSenderId).select("firstName lastName name email profileImage role");
+        }
+
+        if (!sender) {
+            sender = await Admin.findById(cleanSenderId).select("name email role");
+        }
+
+        if (sender) {
+            senderDetails = {
+                _id: sender._id,
+                name: formatUserName(sender),
+                email: sender.email || "",
+                profileImage: sender.profileImage || "",
+                role: sender.role || "User",
+            };
+        }
+
+        const populatedMessage = {
+            _id: message._id,
+            chatGroupId: message.chatGroupId,
+            sender: senderDetails,
+            text: message.text || "",
+            media: message.media || [],
+            isEdited: false,
+            editedAt: null,
+            createdAt: message.createdAt,
+            updatedAt: message.updatedAt,
+        };
 
         // ✅ Update last message in group
         await ChatGroup.findByIdAndUpdate(cleanChatGroupId, {
@@ -371,28 +402,52 @@ exports.getGroupMessages = async (req, res) => {
         if (!isMember)
             return res.status(403).json({ success: false, message: "Access denied. Not a member or admin of this group." });
 
-        // ✅ Fetch messages with proper sender details
+        // ✅ Fetch messages WITHOUT populate first
         const messages = await Message.find({ chatGroupId: cleanChatGroupId })
-            .populate("sender", "firstName lastName name email profileImage role")
             .sort({ createdAt: 1 });
 
-        // ✅ Format messages with proper sender names
-        const formattedMessages = messages.map(msg => ({
-            _id: msg._id,
-            chatGroupId: msg.chatGroupId,
-            sender: msg.sender ? {
-                _id: msg.sender._id,
-                name: formatUserName(msg.sender),
-                email: msg.sender.email || "",
-                profileImage: msg.sender.profileImage || "",
-                role: msg.sender.role || "User",
-            } : null,
-            text: msg.text || "",
-            media: msg.media || [],
-            isEdited: msg.isEdited || false,
-            editedAt: msg.editedAt || null,
-            createdAt: msg.createdAt,
-            updatedAt: msg.updatedAt,
+        // ✅ Manually fetch sender details from appropriate collections
+        const formattedMessages = await Promise.all(messages.map(async (msg) => {
+            let senderDetails = null;
+
+            if (msg.sender) {
+                const senderId = msg.sender.toString();
+
+                // Try UserRegister first
+                let sender = await UserRegister.findById(senderId).select("firstName lastName name email profileImage role");
+
+                // If not found, try Mentor
+                if (!sender) {
+                    sender = await Mentor.findById(senderId).select("firstName lastName name email profileImage role expertise subjects");
+                }
+
+                // If still not found, try Admin
+                if (!sender) {
+                    sender = await Admin.findById(senderId).select("name email role");
+                }
+
+                if (sender) {
+                    senderDetails = {
+                        _id: sender._id,
+                        name: formatUserName(sender),
+                        email: sender.email || "",
+                        profileImage: sender.profileImage || "",
+                        role: sender.role || "User",
+                    };
+                }
+            }
+
+            return {
+                _id: msg._id,
+                chatGroupId: msg.chatGroupId,
+                sender: senderDetails,
+                text: msg.text || "",
+                media: msg.media || [],
+                isEdited: msg.isEdited || false,
+                editedAt: msg.editedAt || null,
+                createdAt: msg.createdAt,
+                updatedAt: msg.updatedAt,
+            };
         }));
 
         // ✅ Format group details with proper names
@@ -628,7 +683,7 @@ exports.sendIndividualMessage = async (req, res) => {
         // ✅ Auto-create chat if it doesn't exist
         if (!chatGroup) {
             chatGroup = new ChatGroup({
-                groupName: `${user.name} ↔ ${mentor.name}`,
+                groupName: `${formatUserName(user)} ↔ ${formatUserName(mentor)}`,
                 enrolledUsers: [cleanUserId],
                 mentors: [cleanMentorId],
                 groupType: "individual",
@@ -664,8 +719,39 @@ exports.sendIndividualMessage = async (req, res) => {
         });
         await message.save();
 
-        const populatedMessage = await Message.findById(message._id)
-            .populate("sender", "name email profileImage");
+        // ✅ Manually fetch sender details
+        let senderDetails = null;
+        let sender = await UserRegister.findById(cleanSenderId).select("firstName lastName name email profileImage role");
+
+        if (!sender) {
+            sender = await Mentor.findById(cleanSenderId).select("firstName lastName name email profileImage role");
+        }
+
+        if (!sender) {
+            sender = await Admin.findById(cleanSenderId).select("name email role");
+        }
+
+        if (sender) {
+            senderDetails = {
+                _id: sender._id,
+                name: formatUserName(sender),
+                email: sender.email || "",
+                profileImage: sender.profileImage || "",
+                role: sender.role || "User",
+            };
+        }
+
+        const formattedMessage = {
+            _id: message._id,
+            chatGroupId: message.chatGroupId,
+            sender: senderDetails,
+            text: message.text || "",
+            media: message.media || [],
+            isEdited: false,
+            editedAt: null,
+            createdAt: message.createdAt,
+            updatedAt: message.updatedAt,
+        };
 
         await ChatGroup.findByIdAndUpdate(chatGroup._id, {
             lastMessage: {
@@ -678,7 +764,7 @@ exports.sendIndividualMessage = async (req, res) => {
         if (io)
             io.to(chatGroup._id.toString()).emit("newIndividualMessage", {
                 chatGroupId: chatGroup._id,
-                message: populatedMessage
+                message: formattedMessage
             });
 
         const totalMessages = await Message.countDocuments({ chatGroupId: chatGroup._id });
@@ -687,7 +773,7 @@ exports.sendIndividualMessage = async (req, res) => {
             success: true,
             message: "Individual message sent successfully",
             totalMessages,
-            data: populatedMessage
+            data: formattedMessage
         });
     } catch (error) {
         console.error("❌ Error sending individual message:", error);
@@ -711,10 +797,8 @@ exports.getAllIndividualChats = async (req, res) => {
 
         console.log("🔍 Searching chats for user:", cleanUserId);
 
-        // ✅ Convert to ObjectId
         const userObjectId = new mongoose.Types.ObjectId(cleanUserId);
 
-        // ✅ Query for individual chats (including those without groupType field)
         const chats = await ChatGroup.find({
             $and: [
                 {
@@ -735,9 +819,9 @@ exports.getAllIndividualChats = async (req, res) => {
                 }
             ]
         })
-            .populate("enrolledUsers", "name email profileImage role")
-            .populate("mentors", "name email profileImage role")
-            .populate("lastMessage.sender", "name email profileImage")
+            .populate("enrolledUsers", "firstName lastName name email profileImage role")
+            .populate("mentors", "firstName lastName name email profileImage role")
+            .populate("lastMessage.sender", "firstName lastName name email profileImage")
             .sort({ "lastMessage.timestamp": -1, updatedAt: -1 });
 
         console.log("✅ Found chats count:", chats.length);
@@ -759,13 +843,34 @@ exports.getAllIndividualChats = async (req, res) => {
                     chat.enrolledUsers.find(u => u._id.toString() !== cleanUserId) ||
                     chat.mentors.find(m => m._id.toString() !== cleanUserId);
 
+                // ✅ Format last message sender
+                let lastMessageFormatted = null;
+                if (chat.lastMessage) {
+                    lastMessageFormatted = {
+                        text: chat.lastMessage.text || "",
+                        timestamp: chat.lastMessage.timestamp || null,
+                        sender: chat.lastMessage.sender ? {
+                            _id: chat.lastMessage.sender._id,
+                            name: formatUserName(chat.lastMessage.sender),
+                            email: chat.lastMessage.sender.email || "",
+                            profileImage: chat.lastMessage.sender.profileImage || "",
+                        } : null,
+                    };
+                }
+
                 return {
                     _id: chat._id,
-                    groupName: chat.groupName,
+                    groupName: chat.groupName || "Unnamed Chat",
                     groupType: chat.groupType || "individual",
-                    otherUser: otherUser || null,
+                    otherUser: otherUser ? {
+                        _id: otherUser._id,
+                        name: formatUserName(otherUser),
+                        email: otherUser.email || "",
+                        profileImage: otherUser.profileImage || "",
+                        role: otherUser.role || "User",
+                    } : null,
                     totalMessages,
-                    lastMessage: chat.lastMessage || null,
+                    lastMessage: lastMessageFormatted,
                     createdAt: chat.createdAt,
                     updatedAt: chat.updatedAt,
                 };
