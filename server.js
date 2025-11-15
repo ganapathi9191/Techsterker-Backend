@@ -70,6 +70,39 @@ app.use((req, res, next) => {
 });
 
 // ==========================
+// ✅ ROOT ROUTE (MUST BE BEFORE /api ROUTES)
+// ==========================
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'HiCap Backend API',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      courses: '/api/courses',
+      users: '/api/users',
+      mentors: '/api/our-mentor',
+      admin: '/api/admin',
+      chat: '/api/group-chats'
+    },
+    documentation: 'All API endpoints are prefixed with /api',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==========================
+// ✅ HEALTH CHECK
+// ==========================
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==========================
 // ✅ REGISTER ROUTES
 // ==========================
 app.use('/api', aboutRoutes);
@@ -104,39 +137,6 @@ setTimeout(() => {
     console.warn('⚠️ No routes registered yet when logging attempted.');
   }
 }, 3000);
-
-// ==========================
-// ✅ HEALTH CHECK
-// ==========================
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    message: 'Server is running',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ==========================
-// ✅ ROOT ROUTE
-// ==========================
-app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'HiCap Backend API',
-    status: 'running',
-    version: '1.0.0',
-    endpoints: {
-      health: '/api/health',
-      courses: '/api/courses',
-      users: '/api/users',
-      mentors: '/api/our-mentor',
-      admin: '/api/admin',
-      chat: '/api/group-chats'
-    },
-    documentation: 'All API endpoints are prefixed with /api',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // ==========================
 // ❌ 404 HANDLER
@@ -243,4 +243,6 @@ const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Socket.IO server ready`);
+  console.log(`🌐 Root: http://31.97.206.144:${PORT}/`);
+  console.log(`🔗 Health: http://31.97.206.144:${PORT}/api/health`);
 });
