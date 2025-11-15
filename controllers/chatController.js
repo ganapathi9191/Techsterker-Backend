@@ -1068,8 +1068,8 @@ exports.getIndividualMessages = async (req, res) => {
                 }
             ]
         })
-            .populate("enrolledUsers", "name email profileImage role")
-            .populate("mentors", "name email profileImage role");
+            .populate("enrolledUsers", "name email profileImage")
+            .populate("mentors", "name email profileImage");
 
         console.log("✅ Chat found:", chatGroup ? "Yes" : "No");
 
@@ -1082,18 +1082,100 @@ exports.getIndividualMessages = async (req, res) => {
             });
         }
 
-        // ✅ Fetch all messages in this chat
+        // ✅ Fetch all messages WITHOUT populate first
         const messages = await Message.find({ chatGroupId: chatGroup._id })
-            .populate("sender", "name email profileImage role")
             .sort({ createdAt: 1 });
 
         console.log("✅ Messages count:", messages.length);
+
+        // ✅✅✅ MANUALLY POPULATE SENDER FROM CORRECT COLLECTION ✅✅✅
+        const populatedMessages = await Promise.all(
+            messages.map(async (message) => {
+                let senderDetails = null;
+                const senderId = message.sender?.toString();
+
+                if (senderId) {
+                    // 🥇 FIRST: Check Admin collection
+                    let adminSender = await Admin.findById(senderId).select("name email profileImage image").lean();
+                    if (adminSender) {
+                        senderDetails = {
+                            _id: adminSender._id,
+                            name: formatUserName(adminSender),
+                            email: adminSender.email || "",
+                            profileImage: adminSender.profileImage || adminSender.image || ""
+                        };
+                    }
+
+                    // 🥈 SECOND: Check Mentor collection (only if not found as Admin)
+                    if (!senderDetails) {
+                        let mentorSender = await Mentor.findById(senderId).select("name email profileImage image").lean();
+                        if (mentorSender) {
+                            senderDetails = {
+                                _id: mentorSender._id,
+                                name: formatUserName(mentorSender),
+                                email: mentorSender.email || "",
+                                profileImage: mentorSender.profileImage || mentorSender.image || ""
+                            };
+                        }
+                    }
+
+                    // 🥉 THIRD: Check UserRegister collection (only if not found as Admin or Mentor)
+                    if (!senderDetails) {
+                        let userSender = await UserRegister.findById(senderId).select("name email profileImage image").lean();
+                        if (userSender) {
+                            senderDetails = {
+                                _id: userSender._id,
+                                name: formatUserName(userSender),
+                                email: userSender.email || "",
+                                profileImage: userSender.profileImage || userSender.image || ""
+                            };
+                        }
+                    }
+                }
+
+                // ✅ Remove role if it exists
+                if (senderDetails && senderDetails.role) {
+                    delete senderDetails.role;
+                }
+
+                return {
+                    _id: message._id,
+                    chatGroupId: message.chatGroupId,
+                    sender: senderDetails,
+                    senderId: senderId, // ✅ Add senderId for frontend comparison
+                    text: message.text || "",
+                    media: message.media || [],
+                    isRead: message.isRead || false,
+                    readBy: message.readBy || [],
+                    createdAt: message.createdAt,
+                    updatedAt: message.updatedAt,
+                    __v: message.__v
+                };
+            })
+        );
+
+        // ✅ Remove role from chatDetails if exists
+        if (chatGroup.enrolledUsers) {
+            chatGroup.enrolledUsers = chatGroup.enrolledUsers.map(user => {
+                const userObj = user.toObject ? user.toObject() : user;
+                delete userObj.role;
+                return userObj;
+            });
+        }
+
+        if (chatGroup.mentors) {
+            chatGroup.mentors = chatGroup.mentors.map(mentor => {
+                const mentorObj = mentor.toObject ? mentor.toObject() : mentor;
+                delete mentorObj.role;
+                return mentorObj;
+            });
+        }
 
         // ✅ Return messages with total count
         return res.status(200).json({
             success: true,
             message: "Messages fetched successfully",
-            totalMessages: messages.length,
+            totalMessages: populatedMessages.length,
             chatDetails: {
                 _id: chatGroup._id,
                 groupName: chatGroup.groupName,
@@ -1103,7 +1185,7 @@ exports.getIndividualMessages = async (req, res) => {
                 createdAt: chatGroup.createdAt,
                 updatedAt: chatGroup.updatedAt,
             },
-            data: messages,
+            data: populatedMessages,
         });
     } catch (error) {
         console.error("❌ Error fetching individual messages:", error);
