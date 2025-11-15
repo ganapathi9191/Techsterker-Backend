@@ -1096,11 +1096,16 @@ exports.getIndividualMessages = async (req, res) => {
 
                 if (senderId) {
                     // 🥇 FIRST: Check Admin collection
-                    let adminSender = await Admin.findById(senderId).select("name email profileImage image").lean();
+                    let adminSender = await Admin.findById(senderId).select("name firstName lastName email profileImage image").lean();
                     if (adminSender) {
+                        const name = adminSender.name || 
+                                   (adminSender.firstName && adminSender.lastName 
+                                       ? `${adminSender.firstName} ${adminSender.lastName}`.trim()
+                                       : adminSender.firstName || adminSender.lastName || adminSender.email || "Admin");
+                        
                         senderDetails = {
                             _id: adminSender._id,
-                            name: formatUserName(adminSender),
+                            name: name,
                             email: adminSender.email || "",
                             profileImage: adminSender.profileImage || adminSender.image || ""
                         };
@@ -1108,11 +1113,16 @@ exports.getIndividualMessages = async (req, res) => {
 
                     // 🥈 SECOND: Check Mentor collection (only if not found as Admin)
                     if (!senderDetails) {
-                        let mentorSender = await Mentor.findById(senderId).select("name email profileImage image").lean();
+                        let mentorSender = await Mentor.findById(senderId).select("name firstName lastName email profileImage image").lean();
                         if (mentorSender) {
+                            const name = mentorSender.name || 
+                                       (mentorSender.firstName && mentorSender.lastName 
+                                           ? `${mentorSender.firstName} ${mentorSender.lastName}`.trim()
+                                           : mentorSender.firstName || mentorSender.lastName || mentorSender.email || "Mentor");
+                            
                             senderDetails = {
                                 _id: mentorSender._id,
-                                name: formatUserName(mentorSender),
+                                name: name,
                                 email: mentorSender.email || "",
                                 profileImage: mentorSender.profileImage || mentorSender.image || ""
                             };
@@ -1121,11 +1131,16 @@ exports.getIndividualMessages = async (req, res) => {
 
                     // 🥉 THIRD: Check UserRegister collection (only if not found as Admin or Mentor)
                     if (!senderDetails) {
-                        let userSender = await UserRegister.findById(senderId).select("name email profileImage image").lean();
+                        let userSender = await UserRegister.findById(senderId).select("name firstName lastName email profileImage image").lean();
                         if (userSender) {
+                            const name = userSender.name || 
+                                       (userSender.firstName && userSender.lastName 
+                                           ? `${userSender.firstName} ${userSender.lastName}`.trim()
+                                           : userSender.firstName || userSender.lastName || userSender.email || "User");
+                            
                             senderDetails = {
                                 _id: userSender._id,
-                                name: formatUserName(userSender),
+                                name: name,
                                 email: userSender.email || "",
                                 profileImage: userSender.profileImage || userSender.image || ""
                             };
@@ -1196,7 +1211,6 @@ exports.getIndividualMessages = async (req, res) => {
         });
     }
 };
-
 
 /* -------------------------------------------------------------------------- */
 /* ✏️ EDIT MESSAGE (Works for both Group and Individual chats)               */
