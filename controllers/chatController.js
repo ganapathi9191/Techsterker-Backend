@@ -641,40 +641,89 @@ exports.createIndividualChat = async (req, res) => {
 exports.sendIndividualMessage = async (req, res) => {
     try {
         const io = req.app.get("io");
-        const { userId, mentorId, senderId, text } = req.body;
+        let { userId, mentorId, senderId, text } = req.body;
+
+        // ✅ Remove quotes if present
+        userId = String(userId || "").replace(/['"]/g, "").trim();
+        mentorId = String(mentorId || "").replace(/['"]/g, "").trim();
+        senderId = String(senderId || "").replace(/['"]/g, "").trim();
+
+        console.log("📥 Received IDs:", { userId, mentorId, senderId });
 
         const cleanUserId = cleanObjectId(userId);
         const cleanMentorId = cleanObjectId(mentorId);
         const cleanSenderId = cleanObjectId(senderId);
 
-        if (!cleanUserId || !cleanMentorId)
-            return res.status(400).json({ success: false, message: "Invalid userId or mentorId" });
+        console.log("🧹 Cleaned IDs:", { cleanUserId, cleanMentorId, cleanSenderId });
 
-        if (!cleanSenderId)
-            return res.status(400).json({ success: false, message: "senderId is required" });
+        if (!cleanUserId || !cleanMentorId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Invalid userId or mentorId format",
+                debug: { userId, mentorId, cleanUserId, cleanMentorId }
+            });
+        }
+
+        if (!cleanSenderId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "senderId is required or invalid",
+                debug: { senderId, cleanSenderId }
+            });
+        }
 
         // ✅ Find user in UserRegister
         let user = await UserRegister.findById(cleanUserId);
+        
+        console.log("👤 User lookup:", { 
+            searchId: cleanUserId, 
+            found: !!user,
+            userName: user ? formatUserName(user) : "Not found"
+        });
+
         if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.status(404).json({ 
+                success: false, 
+                message: "User not found in UserRegister collection",
+                debug: { cleanUserId }
+            });
         }
 
         // ✅ Find mentor - check Mentor collection first, then UserRegister, then Admin
         let mentor = await Mentor.findById(cleanMentorId);
         let mentorModelType = "Mentor";
 
+        console.log("🔍 Mentor lookup in Mentor collection:", {
+            searchId: cleanMentorId,
+            found: !!mentor
+        });
+
         if (!mentor) {
             mentor = await UserRegister.findById(cleanMentorId);
-            if (mentor) mentorModelType = "UserRegister";
+            if (mentor) {
+                mentorModelType = "UserRegister";
+                console.log("🔍 Mentor found in UserRegister collection");
+            }
         }
 
         if (!mentor) {
             mentor = await Admin.findById(cleanMentorId);
-            if (mentor) mentorModelType = "Admin";
+            if (mentor) {
+                mentorModelType = "Admin";
+                console.log("🔍 Mentor found in Admin collection");
+            }
         }
 
         if (!mentor) {
-            return res.status(404).json({ success: false, message: "Mentor not found" });
+            console.error("❌ Mentor not found in any collection:", cleanMentorId);
+            return res.status(404).json({ 
+                success: false, 
+                message: "Mentor not found in any collection (Mentor, UserRegister, Admin)",
+                debug: { 
+                    cleanMentorId,
+                    searchedIn: ["Mentor", "UserRegister", "Admin"]
+                }
+            });
         }
 
         console.log("✅ User found:", formatUserName(user));
