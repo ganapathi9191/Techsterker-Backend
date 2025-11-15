@@ -653,11 +653,32 @@ exports.sendIndividualMessage = async (req, res) => {
         if (!cleanSenderId)
             return res.status(400).json({ success: false, message: "senderId is required" });
 
+        // ✅ Find user in UserRegister
         let user = await UserRegister.findById(cleanUserId);
-        let mentor = await UserRegister.findById(cleanMentorId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
 
-        if (!user || !mentor)
-            return res.status(404).json({ success: false, message: "User or mentor not found" });
+        // ✅ Find mentor - check Mentor collection first, then UserRegister, then Admin
+        let mentor = await Mentor.findById(cleanMentorId);
+        let mentorModelType = "Mentor";
+
+        if (!mentor) {
+            mentor = await UserRegister.findById(cleanMentorId);
+            if (mentor) mentorModelType = "UserRegister";
+        }
+
+        if (!mentor) {
+            mentor = await Admin.findById(cleanMentorId);
+            if (mentor) mentorModelType = "Admin";
+        }
+
+        if (!mentor) {
+            return res.status(404).json({ success: false, message: "Mentor not found" });
+        }
+
+        console.log("✅ User found:", formatUserName(user));
+        console.log("✅ Mentor found:", formatUserName(mentor), "- Model:", mentorModelType);
 
         // ✅ Verify senderId is either userId or mentorId
         if (cleanSenderId !== cleanUserId && cleanSenderId !== cleanMentorId) {
@@ -682,16 +703,21 @@ exports.sendIndividualMessage = async (req, res) => {
 
         // ✅ Auto-create chat if it doesn't exist
         if (!chatGroup) {
+            console.log("⚠️ Chat not found, creating new chat...");
+            
             chatGroup = new ChatGroup({
                 groupName: `${formatUserName(user)} ↔ ${formatUserName(mentor)}`,
                 enrolledUsers: [cleanUserId],
                 mentors: [cleanMentorId],
+                mentorModel: mentorModelType,
                 groupType: "individual",
                 status: "Active",
             });
             await chatGroup.save();
+            console.log("✅ New chat created:", chatGroup._id);
         }
 
+        // ✅ Handle file uploads
         let uploadedMedia = [];
         if (req.files?.length) {
             for (const file of req.files) {
@@ -711,6 +737,7 @@ exports.sendIndividualMessage = async (req, res) => {
         if (!text && uploadedMedia.length === 0)
             return res.status(400).json({ success: false, message: "Message must contain text or files" });
 
+        // ✅ Create message
         const message = new Message({
             chatGroupId: chatGroup._id,
             sender: cleanSenderId,
@@ -719,7 +746,7 @@ exports.sendIndividualMessage = async (req, res) => {
         });
         await message.save();
 
-        // ✅ Manually fetch sender details
+        // ✅ Manually fetch sender details (could be user, mentor, or admin)
         let senderDetails = null;
         let sender = await UserRegister.findById(cleanSenderId).select("firstName lastName name email profileImage role");
 
@@ -739,6 +766,15 @@ exports.sendIndividualMessage = async (req, res) => {
                 profileImage: sender.profileImage || "",
                 role: sender.role || "User",
             };
+        } else {
+            console.warn("⚠️ Sender not found in any collection:", cleanSenderId);
+            senderDetails = {
+                _id: cleanSenderId,
+                name: "Unknown User",
+                email: "",
+                profileImage: "",
+                role: "User",
+            };
         }
 
         const formattedMessage = {
@@ -753,6 +789,7 @@ exports.sendIndividualMessage = async (req, res) => {
             updatedAt: message.updatedAt,
         };
 
+        // ✅ Update last message in chat group
         await ChatGroup.findByIdAndUpdate(chatGroup._id, {
             lastMessage: {
                 text: text || (uploadedMedia.length > 0 ? `Sent ${uploadedMedia.length} file(s)` : ""),
@@ -761,6 +798,7 @@ exports.sendIndividualMessage = async (req, res) => {
             },
         });
 
+        // ✅ Emit socket event
         if (io)
             io.to(chatGroup._id.toString()).emit("newIndividualMessage", {
                 chatGroupId: chatGroup._id,
@@ -780,7 +818,6 @@ exports.sendIndividualMessage = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
-
 /* -------------------------------------------------------------------------- */
 /* 📋 GET ALL INDIVIDUAL CHATS (One-on-One)                                   */
 /* -------------------------------------------------------------------------- */
