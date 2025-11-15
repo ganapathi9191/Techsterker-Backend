@@ -15,6 +15,24 @@ const cleanObjectId = (id) => {
     return match ? match[0] : null;
 };
 
+// ✅ Helper function: Format user name properly
+const formatUserName = (user) => {
+    if (!user) return "Unknown User";
+
+    // Check for firstName/lastName
+    if (user.firstName || user.lastName) {
+        return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    }
+
+    // Check for name field
+    if (user.name) {
+        return user.name;
+    }
+
+    // Fallback
+    return user.email || "Unknown User";
+};
+
 /* ========================================================================== */
 /*                            GROUP CHAT SECTION                              */
 /* ========================================================================== */
@@ -46,7 +64,7 @@ exports.createGroupChat = async (req, res) => {
         const enrollment = await Enrollment.findById(cleanEnrollmentId)
             .populate("courseId")
             .populate("assignedMentors", "firstName lastName email phoneNumber expertise subjects profileImage")
-            .populate("enrolledUsers", "firstName lastName email phoneNumber profileImage");
+            .populate("enrolledUsers", "firstName lastName name email phoneNumber profileImage");
 
         if (!enrollment) {
             return res.status(404).json({ success: false, message: "Enrollment not found" });
@@ -89,8 +107,8 @@ exports.createGroupChat = async (req, res) => {
             .populate("adminId", "name email role")
             .populate("enrollmentId", "batchName batchNumber")
             .populate("courseId", "courseName")
-            .populate("enrolledUsers", "firstName lastName email phoneNumber profileImage")
-            .populate("mentors", "firstName lastName email phoneNumber profileImage expertise subjects");
+            .populate("enrolledUsers", "firstName lastName name email phoneNumber profileImage")
+            .populate("mentors", "firstName lastName name email phoneNumber profileImage expertise subjects");
 
         return res.status(201).json({
             success: true,
@@ -106,6 +124,7 @@ exports.createGroupChat = async (req, res) => {
         });
     }
 };
+
 
 
 
@@ -125,8 +144,8 @@ exports.sendGroupMessage = async (req, res) => {
 
         const chatGroup = await ChatGroup.findById(cleanChatGroupId)
             .populate("adminId", "name email role")
-            .populate("enrolledUsers", "firstName lastName email")
-            .populate("mentors", "firstName lastName email");
+            .populate("enrolledUsers", "firstName lastName name email")
+            .populate("mentors", "firstName lastName name email");
 
         if (!chatGroup)
             return res.status(404).json({ success: false, message: "Chat group not found" });
@@ -170,7 +189,7 @@ exports.sendGroupMessage = async (req, res) => {
         await message.save();
 
         const populatedMessage = await Message.findById(message._id)
-            .populate("sender", "firstName lastName email profileImage role");
+            .populate("sender", "firstName lastName name email profileImage role");
 
         // ✅ Update last message in group
         await ChatGroup.findByIdAndUpdate(cleanChatGroupId, {
@@ -228,9 +247,9 @@ exports.getAllGroupChats = async (req, res) => {
             ],
         })
             .populate("adminId", "name email role")
-            .populate("enrolledUsers", "firstName lastName email phoneNumber profileImage")
-            .populate("mentors", "firstName lastName email phoneNumber profileImage expertise subjects")
-            .populate("lastMessage.sender", "firstName lastName email profileImage")
+            .populate("enrolledUsers", "firstName lastName name email phoneNumber profileImage")
+            .populate("mentors", "firstName lastName name email phoneNumber profileImage expertise subjects")
+            .populate("lastMessage.sender", "firstName lastName name email profileImage")
             .populate("courseId", "courseName")
             .populate("enrollmentId", "batchName batchNumber")
             .sort({ "lastMessage.timestamp": -1, updatedAt: -1 });
@@ -249,10 +268,10 @@ exports.getAllGroupChats = async (req, res) => {
             chats.map(async (chat) => {
                 const totalMessages = await Message.countDocuments({ chatGroupId: chat._id });
 
-                // 🧩 Format mentors list
+                // 🧩 Format mentors list with proper names
                 const mentorDetails = (chat.mentors || []).map((m) => ({
                     _id: m._id,
-                    name: `${m.firstName || ""} ${m.lastName || ""}`.trim(),
+                    name: formatUserName(m),
                     email: m.email || "",
                     phoneNumber: m.phoneNumber || "",
                     expertise: m.expertise || "",
@@ -261,27 +280,42 @@ exports.getAllGroupChats = async (req, res) => {
                     role: "Mentor",
                 }));
 
-                // 🧩 Format enrolled users
+                // 🧩 Format enrolled users with proper names
                 const enrolledUserDetails = (chat.enrolledUsers || []).map((u) => ({
                     _id: u._id,
-                    name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+                    name: formatUserName(u),
                     email: u.email || "",
                     phoneNumber: u.phoneNumber || "",
                     profileImage: u.profileImage || "",
                     role: "Student",
                 }));
 
+                // 🧩 Format last message sender
+                let lastMessageFormatted = null;
+                if (chat.lastMessage) {
+                    lastMessageFormatted = {
+                        text: chat.lastMessage.text || "",
+                        timestamp: chat.lastMessage.timestamp || null,
+                        sender: chat.lastMessage.sender ? {
+                            _id: chat.lastMessage.sender._id,
+                            name: formatUserName(chat.lastMessage.sender),
+                            email: chat.lastMessage.sender.email || "",
+                            profileImage: chat.lastMessage.sender.profileImage || "",
+                        } : null,
+                    };
+                }
+
                 return {
                     _id: chat._id,
-                    groupName: chat.groupName,
+                    groupName: chat.groupName || "Unnamed Group",
                     admin: chat.adminId || null,
-                    courseName: chat.courseId?.courseName || null,
-                    batchName: chat.enrollmentId?.batchName || null,
+                    courseName: chat.courseId?.courseName || "No Course",
+                    batchName: chat.enrollmentId?.batchName || "No Batch",
                     groupType: chat.groupType,
                     enrolledUsers: enrolledUserDetails,
-                    mentors: mentorDetails, // ✅ Added here
+                    mentors: mentorDetails,
                     totalMessages,
-                    lastMessage: chat.lastMessage || null,
+                    lastMessage: lastMessageFormatted,
                     membersCount:
                         (chat.enrolledUsers?.length || 0) +
                         (chat.mentors?.length || 0) +
@@ -308,9 +342,6 @@ exports.getAllGroupChats = async (req, res) => {
     }
 };
 
-/* -------------------------------------------------------------------------- */
-/* 💬 GET GROUP MESSAGES BY GROUP ID                                          */
-/* -------------------------------------------------------------------------- */
 exports.getGroupMessages = async (req, res) => {
     try {
         const { chatGroupId, userId } = req.params;
@@ -323,8 +354,8 @@ exports.getGroupMessages = async (req, res) => {
 
         const chatGroup = await ChatGroup.findById(cleanChatGroupId)
             .populate("adminId", "name email role")
-            .populate("enrolledUsers", "firstName lastName email profileImage role")
-            .populate("mentors", "firstName lastName email profileImage role")
+            .populate("enrolledUsers", "firstName lastName name email profileImage role")
+            .populate("mentors", "firstName lastName name email profileImage role")
             .populate("courseId", "courseName")
             .populate("enrollmentId", "batchName batchNumber");
 
@@ -340,23 +371,69 @@ exports.getGroupMessages = async (req, res) => {
         if (!isMember)
             return res.status(403).json({ success: false, message: "Access denied. Not a member or admin of this group." });
 
-        // ✅ Fetch messages
+        // ✅ Fetch messages with proper sender details
         const messages = await Message.find({ chatGroupId: cleanChatGroupId })
-            .populate("sender", "firstName lastName email profileImage role")
+            .populate("sender", "firstName lastName name email profileImage role")
             .sort({ createdAt: 1 });
+
+        // ✅ Format messages with proper sender names
+        const formattedMessages = messages.map(msg => ({
+            _id: msg._id,
+            chatGroupId: msg.chatGroupId,
+            sender: msg.sender ? {
+                _id: msg.sender._id,
+                name: formatUserName(msg.sender),
+                email: msg.sender.email || "",
+                profileImage: msg.sender.profileImage || "",
+                role: msg.sender.role || "User",
+            } : null,
+            text: msg.text || "",
+            media: msg.media || [],
+            isEdited: msg.isEdited || false,
+            editedAt: msg.editedAt || null,
+            createdAt: msg.createdAt,
+            updatedAt: msg.updatedAt,
+        }));
+
+        // ✅ Format group details with proper names
+        const groupDetails = {
+            _id: chatGroup._id,
+            groupName: chatGroup.groupName || "Unnamed Group",
+            groupType: chatGroup.groupType || "group",
+            admin: chatGroup.adminId || null,
+            courseName: chatGroup.courseId?.courseName || "No Course",
+            batchName: chatGroup.enrollmentId?.batchName || "No Batch",
+            enrolledUsers: (chatGroup.enrolledUsers || []).map(u => ({
+                _id: u._id,
+                name: formatUserName(u),
+                email: u.email || "",
+                profileImage: u.profileImage || "",
+                role: u.role || "Student",
+            })),
+            mentors: (chatGroup.mentors || []).map(m => ({
+                _id: m._id,
+                name: formatUserName(m),
+                email: m.email || "",
+                profileImage: m.profileImage || "",
+                role: m.role || "Mentor",
+            })),
+            createdAt: chatGroup.createdAt,
+            updatedAt: chatGroup.updatedAt,
+        };
 
         return res.status(200).json({
             success: true,
             message: "Group messages fetched successfully",
-            totalMessages: messages.length,
-            groupDetails: chatGroup,
-            data: messages,
+            totalMessages: formattedMessages.length,
+            groupDetails,
+            data: formattedMessages,
         });
     } catch (error) {
         console.error("❌ Error fetching group messages:", error);
         return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };
+
 
 /* ========================================================================== */
 /*                         ONE-ON-ONE CHAT SECTION                            */
@@ -466,12 +543,9 @@ exports.createIndividualChat = async (req, res) => {
             });
         }
 
-        // ✅ Create new chat group
+        // ✅ Create new chat group with proper name
         const chatGroup = new ChatGroup({
-            groupName:
-                groupName ||
-                `${user.firstName || user.name || "User"} ↔ ${mentor.firstName || mentor.name || "Mentor"
-                }`,
+            groupName: groupName || `${formatUserName(user)} ↔ ${formatUserName(mentor)}`,
             enrolledUsers: [cleanUserId],
             mentors: [cleanMentorId],
             mentorModel: mentorModelType,
